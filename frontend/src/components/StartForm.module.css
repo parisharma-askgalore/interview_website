@@ -1,0 +1,355 @@
+/* StartForm.module.css */
+
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap');
+
+/* ── Variables ─────────────────────────────────────── */
+:root {
+  --blue-900: #0a1628;
+  --blue-800: #0d2045;
+  --blue-700: #0f3060;
+  --blue-600: #1a4a8a;
+  --blue-500: #2563c4;
+  --blue-400: #4a87e8;
+  --blue-300: #93bbf5;
+  --blue-100: #dbeafe;
+  --blue-50:  #f0f6ff;
+
+  --orange-500: #f36b21;
+  --orange-600: #d9560f;
+  --orange-300: #ffb380;
+  --orange-glow: rgba(243, 107, 33, 0.35);
+
+  --white: #ffffff;
+  --surface: rgba(255, 255, 255, 0.07);
+  --border:  rgba(255, 255, 255, 0.12);
+  --text-muted: rgba(255, 255, 255, 0.5);
+
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 22px;
+  --transition: 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ── Page wrapper ──────────────────────────────────── */
+.page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+
+  background:
+    radial-gradient(ellipse 80% 60% at 50% -10%, rgba(37, 99, 196, 0.55) 0%, transparent 70%),
+    radial-gradient(ellipse 50% 40% at 90% 80%,  rgba(10, 69, 138, 0.4) 0%, transparent 65%),
+    linear-gradient(160deg, var(--blue-900) 0%, #060e1f 100%);
+
+  font-family: 'DM Sans', sans-serif;
+}
+
+/* subtle noise grain */
+.page::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── Card ──────────────────────────────────────────── */
+.card {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 480px;
+
+  background: rgba(13, 32, 69, 0.65);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 2.75rem 2.5rem 3rem;
+
+  box-shadow:
+    0 2px 0 0 rgba(255, 255, 255, 0.06) inset,
+    0 40px 80px -20px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(0, 0, 0, 0.25);
+
+  animation: cardIn 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes cardIn {
+  from { opacity: 0; transform: translateY(28px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0)   scale(1);    }
+}
+
+/* accent stripe at top of card */
+.card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 10%; right: 10%;
+  height: 2px;
+  border-radius: 0 0 4px 4px;
+  background: linear-gradient(90deg, transparent, var(--blue-400), var(--orange-500), var(--blue-400), transparent);
+  opacity: 0.8;
+}
+
+/* ── Header ────────────────────────────────────────── */
+.header {
+  margin-bottom: 2.25rem;
+  text-align: center;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px 4px 8px;
+  border-radius: 100px;
+  border: 1px solid rgba(74, 135, 232, 0.35);
+  background: rgba(74, 135, 232, 0.1);
+  color: var(--blue-300);
+  font-family: 'Sora', sans-serif;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 1rem;
+}
+
+.badge::before {
+  content: '';
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--blue-400);
+  box-shadow: 0 0 6px var(--blue-400);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1;   transform: scale(1);   }
+  50%       { opacity: 0.5; transform: scale(0.85); }
+}
+
+.title {
+  font-family: 'Sora', sans-serif;
+  font-size: clamp(1.6rem, 4vw, 2rem);
+  font-weight: 700;
+  color: var(--white);
+  line-height: 1.15;
+  margin: 0 0 0.5rem;
+  letter-spacing: -0.02em;
+}
+
+.title span {
+  background: linear-gradient(135deg, var(--blue-300) 20%, var(--white) 80%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.subtitle {
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  margin: 0;
+  line-height: 1.5;
+  font-weight: 300;
+}
+
+/* ── Form ──────────────────────────────────────────── */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.3rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  animation: fieldIn 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.field:nth-child(1) { animation-delay: 0.1s; }
+.field:nth-child(2) { animation-delay: 0.18s; }
+.field:nth-child(3) { animation-delay: 0.26s; }
+
+@keyframes fieldIn {
+  from { opacity: 0; transform: translateX(-10px); }
+  to   { opacity: 1; transform: translateX(0);     }
+}
+
+.label {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--blue-300);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-family: 'Sora', sans-serif;
+}
+
+.required {
+  color: var(--orange-500);
+  margin-left: 2px;
+}
+
+.inputWrap {
+  position: relative;
+}
+
+.inputIcon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--blue-400);
+  opacity: 0.6;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  transition: opacity var(--transition);
+}
+
+.input {
+  width: 100%;
+  padding: 0.75rem 1rem 0.75rem 2.75rem;
+  box-sizing: border-box;
+
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-sm);
+  color: var(--white);
+
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.95rem;
+  font-weight: 400;
+
+  outline: none;
+  transition:
+    border-color var(--transition),
+    background var(--transition),
+    box-shadow var(--transition);
+}
+
+.input::placeholder {
+  color: rgba(255, 255, 255, 0.25);
+}
+
+.input:hover {
+  border-color: rgba(74, 135, 232, 0.4);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.input:focus {
+  border-color: var(--blue-400);
+  background: rgba(37, 99, 196, 0.12);
+  box-shadow: 0 0 0 3px rgba(74, 135, 232, 0.18), 0 1px 3px rgba(0,0,0,0.3);
+}
+
+.input:focus + .inputIcon,
+.inputWrap:focus-within .inputIcon {
+  opacity: 1;
+}
+
+/* ── Divider ───────────────────────────────────────── */
+.divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--border), transparent);
+  margin: 0.25rem 0;
+}
+
+/* ── Submit button ─────────────────────────────────── */
+.submitBtn {
+  margin-top: 0.5rem;
+  padding: 0.9rem 1.5rem;
+  width: 100%;
+
+  background: linear-gradient(135deg, var(--orange-500) 0%, #e8540f 100%);
+  border: none;
+  border-radius: var(--radius-md);
+  color: var(--white);
+
+  font-family: 'Sora', sans-serif;
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+
+  position: relative;
+  overflow: hidden;
+
+  box-shadow:
+    0 4px 20px var(--orange-glow),
+    0 1px 0 rgba(255,255,255,0.15) inset;
+
+  transition:
+    transform var(--transition),
+    box-shadow var(--transition),
+    filter var(--transition);
+
+  animation: fieldIn 0.4s 0.34s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* shimmer sweep */
+.submitBtn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.18) 50%, transparent 60%);
+  transform: translateX(-100%);
+  transition: transform 0.5s ease;
+}
+
+.submitBtn:hover::before {
+  transform: translateX(100%);
+}
+
+.submitBtn:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 8px 30px var(--orange-glow),
+    0 1px 0 rgba(255,255,255,0.2) inset;
+  filter: brightness(1.08);
+}
+
+.submitBtn:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 10px var(--orange-glow);
+}
+
+.btnInner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.btnArrow {
+  transition: transform var(--transition);
+}
+
+.submitBtn:hover .btnArrow {
+  transform: translateX(4px);
+}
+
+/* ── Footer note ───────────────────────────────────── */
+.footerNote {
+  text-align: center;
+  margin-top: 1.5rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.footerNote strong {
+  color: var(--blue-300);
+  font-weight: 500;
+}
+
+/* ── Responsive ────────────────────────────────────── */
+@media (max-width: 520px) {
+  .card {
+    padding: 2rem 1.5rem 2.25rem;
+  }
+}
