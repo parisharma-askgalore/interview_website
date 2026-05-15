@@ -4,7 +4,9 @@ const QuestionSchema = new mongoose.Schema({
 
   questionIndex: Number,
 
-  question: String
+  question: String,
+
+  answer: String
 
 });
 
