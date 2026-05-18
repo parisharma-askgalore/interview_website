@@ -1,7 +1,6 @@
 import express from "express";
 import InterviewSession from "../models/InterviewSession.js";
 import Question from "../models/Question.js";
-import fs from "fs";
 import crypto from "crypto";
 
 import azureClient from
@@ -132,8 +131,14 @@ router.post(
 
     } catch (error) {
 
+      console.log(error);
+
       res.status(500).json({
-        message: error.message
+        question:
+          "Explain a challenging technical problem you solved.",
+
+        expectedAnswer:
+          "Structured technical explanation."
       });
 
     }
@@ -218,20 +223,27 @@ router.get("/questions", async (req, res) => {
 router.post(
   "/:sessionId/answer",
 
-  if (
-    session.interviewTerminated
-  ) {
-
-    return res.status(403).json({
-
-      message:
-        "Interview terminated"
-    });
-  }
-
   async (req, res) => {
 
     try {
+
+      const session =
+        await InterviewSession.findOne({
+
+          sessionId:
+            req.params.sessionId
+        });
+
+      if (
+        session.interviewTerminated
+      ) {
+
+        return res.status(403).json({
+
+          message:
+            "Interview terminated"
+        });
+      }
 
       const {
         questionIndex,
@@ -262,14 +274,6 @@ router.post(
             req.body.expectedAnswer || "";
         }
 
-      const session =
-        await InterviewSession.findOne({
-
-          sessionId:
-            req.params.sessionId
-
-        });
-
       session.answers.push({
 
         questionNumber:
@@ -285,11 +289,7 @@ router.post(
 
         evaluation: "Processing...",
 
-        evaluationStatus: "pending",
-
-        expectedAnswer:
-          questions[currentQuestionIndex]
-            .answer
+        evaluationStatus: "pending"
 
       });
 

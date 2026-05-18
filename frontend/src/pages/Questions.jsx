@@ -100,37 +100,65 @@ useEffect(() => {
 
   const handleFullscreenChange =
     async () => {
+
+      if (
+        !document.fullscreenElement
+      ) {
+
         const response =
-            await API.post(
+          await API.post(
 
-              `/interview/${sessionId}/violation`,
+            `/interview/${sessionId}/violation`,
 
-              {
-                type:
-                  "fullscreen_exit"
-              }
-            );
-
-          if (response.data.terminated) {
-
-            alert(
-              "Interview ended due to cheating detection."
-            );
-
-            navigate("/thankyou");
-
-            return;
-          }
-
-          alert(
-            "Fullscreen exit detected."
+            {
+              type:
+                "fullscreen_exit"
+            }
           );
 
-          await document.documentElement
-            .requestFullscreen();
-                
+        if (
+          response.data.terminated
+        ) {
 
-      }, []);
+          alert(
+            "Interview ended due to cheating detection."
+          );
+
+          navigate("/thankyou");
+
+          return;
+        }
+
+        alert(
+          "Fullscreen exit detected."
+        );
+
+        await document.documentElement
+          .requestFullscreen();
+      }
+    };
+
+  document.addEventListener(
+
+    "fullscreenchange",
+
+    handleFullscreenChange
+  );
+
+  return () => {
+
+    document.removeEventListener(
+
+      "fullscreenchange",
+
+      handleFullscreenChange
+    );
+
+  };
+
+}, []);
+
+enterFullscreen();
 
 useEffect(() => {
 
@@ -171,7 +199,7 @@ useEffect(() => {
 
 useEffect(() => {
 
-  const handleVisibility = () => {
+  const handleVisibility = async () => {
 
     if (document.hidden) {
 
@@ -405,7 +433,11 @@ const detectSilence = (stream) => {
               questions[currentQuestionIndex]
                 .question,
 
-            transcript
+            transcript,
+
+            expectedAnswer:
+              questions[currentQuestionIndex]
+                .answer
 
           }
 
@@ -433,6 +465,8 @@ const detectSilence = (stream) => {
     const moveNextQuestion = async () => {
       if (
           currentQuestionIndex >= 2
+          &&
+          questions.length < 10
         ) {
 
           const response =
