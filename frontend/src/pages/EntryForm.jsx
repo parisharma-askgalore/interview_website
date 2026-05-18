@@ -24,9 +24,9 @@ export default function StartForm() {
   const [formData, setFormData] = useState({
     name: "",
     email: "",
-    position: ""
+    role: ""
   });
-
+  
   const navigate = useNavigate();
 
   const handleChange = (e) => {
@@ -115,10 +115,11 @@ export default function StartForm() {
               <div className={styles.field}>
                 <label className={styles.label}>
                     <select
-                      value={role}
-                      onChange={e =>
-                        setRole(e.target.value)
-                      }
+                      className={styles.input}
+                      name="role"
+                      value={formData.role || ""}
+                      onChange={handleChange}
+                      required
                     >
 
                       <option value="">
@@ -146,14 +147,6 @@ export default function StartForm() {
                 </label>
                 <div className={styles.inputWrap}>
                   <span className={styles.inputIcon}><IconBriefcase /></span>
-                  <input
-                    className={styles.input}
-                    type="text"
-                    name="position"
-                    placeholder="Role you're applying for"
-                    onChange={handleChange}
-                    required
-                  />
                 </div>
               </div>
     
