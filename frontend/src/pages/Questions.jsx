@@ -58,6 +58,11 @@ const [violationCount,
 setViolationCount] =
 useState(0);
 
+const [
+  fullscreenWarning,
+  setFullscreenWarning
+] = useState(false);
+
 useEffect(() => {
 
   fetchQuestions();
@@ -129,12 +134,7 @@ useEffect(() => {
           return;
         }
 
-        alert(
-          "Fullscreen exit detected."
-        );
-
-        await document.documentElement
-          .requestFullscreen();
+        setFullscreenWarning(true);
       }
     };
 
@@ -144,6 +144,46 @@ useEffect(() => {
 
     handleFullscreenChange
   );
+
+  if (fullscreenWarning) {
+
+  return (
+
+    <div className={styles.page}>
+
+      <div className={styles.card}>
+
+        <h2>
+          Fullscreen Required
+        </h2>
+
+        <p>
+          Please re-enter fullscreen
+          mode to continue the
+          interview.
+        </p>
+
+        <button
+
+          onClick={async () => {
+
+            await document
+              .documentElement
+              .requestFullscreen();
+
+            setFullscreenWarning(
+              false
+            );
+          }}
+        >
+          Re-enter Fullscreen
+        </button>
+
+      </div>
+
+    </div>
+  );
+}
 
   return () => {
 
