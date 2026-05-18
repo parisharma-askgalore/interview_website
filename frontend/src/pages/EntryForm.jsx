@@ -114,7 +114,35 @@ export default function StartForm() {
     
               <div className={styles.field}>
                 <label className={styles.label}>
-                  Position <span className={styles.required}>*</span>
+                    <select
+                      value={role}
+                      onChange={e =>
+                        setRole(e.target.value)
+                      }
+                    >
+
+                      <option value="">
+                        Select Role
+                      </option>
+
+                      <option value="AI/ML Intern">
+                        AI/ML Intern
+                      </option>
+
+                      <option value="AI/ML Engineer">
+                        AI/ML Engineer
+                      </option>
+
+                      <option value="DevOps Engineer">
+                        DevOps Engineer
+                      </option>
+
+                      <option value="AI/ML Fintech Engineer">
+                        AI/ML Fintech Engineer
+                      </option>
+
+                    </select>
+                   <span className={styles.required}>*</span>
                 </label>
                 <div className={styles.inputWrap}>
                   <span className={styles.inputIcon}><IconBriefcase /></span>

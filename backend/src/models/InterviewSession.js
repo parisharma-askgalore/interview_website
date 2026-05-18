@@ -7,7 +7,8 @@ const InterviewSessionSchema = new mongoose.Schema(
     candidate: {
       name: String,
       email: String,
-      position: String
+      position: String,
+      role: String
     },
 
     status: {
@@ -17,6 +18,8 @@ const InterviewSessionSchema = new mongoose.Schema(
 
     answers: [
       {
+        aiGenerated: Boolean,
+        
         questionNumber: Number,
 
         questionText: String,
@@ -34,11 +37,27 @@ const InterviewSessionSchema = new mongoose.Schema(
           default: "pending"
         }
       }
-    ]
-  },
+    ],
+
+    violations: [
+      {
+        type: String,
+        timestamp: Date
+      }
+    ],
+
+    interviewTerminated: {
+      type: Boolean,
+      default: false
+    },
+
+    terminationReason: String,
+
+    role: String
+      },
   {
     timestamps: true
-  }
+  },
 );
 
 const InterviewSession = mongoose.model(

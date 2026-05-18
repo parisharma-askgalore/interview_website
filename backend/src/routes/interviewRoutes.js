@@ -22,7 +22,7 @@ const router = express.Router();
 
 router.post("/start", async (req, res) => {
   try {
-    const { name, email, position } = req.body;
+    const { name, email, role } = req.body;
 
     const session = await InterviewSession.create({
       sessionId: crypto.randomUUID(),
@@ -30,7 +30,7 @@ router.post("/start", async (req, res) => {
       candidate: {
         name,
         email,
-        position
+        role
       }
     });
 
@@ -44,6 +44,158 @@ router.post("/start", async (req, res) => {
 
   }
 });
+
+router.post(
+  "/:sessionId/generate-question",
+
+  async (req, res) => {
+
+    try {
+
+      const session =
+        await InterviewSession.findOne({
+
+          sessionId:
+            req.params.sessionId
+        });
+
+      const role =
+        session.candidate.role;
+
+      const previousAnswers =
+        session.answers
+          .map(
+
+            answer =>
+
+              `
+              Question:
+              ${answer.questionText}
+
+              Answer:
+              ${answer.transcript}
+              `
+          )
+          .join("\n");
+
+      const completion =
+        await azureClient.chat.completions.create({
+
+          model:
+            process.env
+              .AZURE_OPENAI_DEPLOYMENT,
+
+          messages: [
+
+            {
+              role: "system",
+
+              content:
+              `
+              You are an interviewer.
+
+              Generate ONE moderately hard
+              interview question for:
+
+              ${role}
+
+              Build upon previous answers.
+
+              Also generate ideal answer.
+
+              Return JSON:
+
+              {
+                "question": "...",
+                "expectedAnswer": "..."
+              }
+              `
+            },
+
+            {
+              role: "user",
+
+              content:
+                previousAnswers
+            }
+          ]
+        });
+
+      const content =
+        completion.choices[0]
+          .message.content;
+
+      const parsed =
+        JSON.parse(content);
+
+      res.json(parsed);
+
+    } catch (error) {
+
+      res.status(500).json({
+        message: error.message
+      });
+
+    }
+  }
+);
+
+router.post(
+  "/:sessionId/violation",
+
+  async (req, res) => {
+
+    try {
+
+      const {
+        type
+      } = req.body;
+
+      const session =
+        await InterviewSession.findOne({
+
+          sessionId:
+            req.params.sessionId
+        });
+      
+
+      session.violations.push({
+
+        type,
+        timestamp: new Date()
+      });
+
+      if (
+        session.violations.length >= 2
+      ) {
+
+        session.interviewTerminated =
+          true;
+
+        session.terminationReason =
+          "Cheating detected";
+
+        session.status =
+        "terminated";
+      }
+
+      await session.save();
+
+      res.json({
+
+        terminated:
+          session.interviewTerminated
+      });
+
+    } catch (error) {
+
+      res.status(500).json({
+        message: error.message
+      });
+
+    }
+  }
+);
 
 router.get("/questions", async (req, res) => {
 
@@ -66,6 +218,17 @@ router.get("/questions", async (req, res) => {
 router.post(
   "/:sessionId/answer",
 
+  if (
+    session.interviewTerminated
+  ) {
+
+    return res.status(403).json({
+
+      message:
+        "Interview terminated"
+    });
+  }
+
   async (req, res) => {
 
     try {
@@ -76,16 +239,28 @@ router.post(
         transcript
       } = req.body;
 
-      const originalQuestion =
-        await Question.findOne({
+      let expectedAnswer = "";
 
-          questionIndex:
-            Number(questionIndex) + 1
+        if (
+          Number(questionIndex) < 3
+        ) {
 
-        });
+          const originalQuestion =
+            await Question.findOne({
 
-      const expectedAnswer =
-        originalQuestion?.answer || "";
+              questionIndex:
+                Number(questionIndex) + 1
+
+            });
+
+          expectedAnswer =
+            originalQuestion?.answer || "";
+
+        } else {
+
+          expectedAnswer =
+            req.body.expectedAnswer || "";
+        }
 
       const session =
         await InterviewSession.findOne({
@@ -110,7 +285,11 @@ router.post(
 
         evaluation: "Processing...",
 
-        evaluationStatus: "pending"
+        evaluationStatus: "pending",
+
+        expectedAnswer:
+          questions[currentQuestionIndex]
+            .answer
 
       });
 

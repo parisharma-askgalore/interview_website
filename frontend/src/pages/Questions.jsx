@@ -34,7 +34,7 @@ const [isRecording, setIsRecording] = useState(false);
 
 const [status, setStatus] = useState("Loading questions...");
 
-const TOTAL = 5;
+const TOTAL = 10;
 
 const mediaRecorderRef = useRef(null);
 
@@ -53,6 +53,10 @@ const analyserRef = useRef(null);
 const audioContextRef = useRef(null);
 
 const sessionId = localStorage.getItem("sessionId");
+
+const [violationCount,
+setViolationCount] =
+useState(0);
 
 useEffect(() => {
 
@@ -96,47 +100,37 @@ useEffect(() => {
 
   const handleFullscreenChange =
     async () => {
+        const response =
+            await API.post(
 
-      if (
-        !document.fullscreenElement
-      ) {
+              `/interview/${sessionId}/violation`,
 
-        alert(
-          "You cannot exit fullscreen during the interview."
-        );
+              {
+                type:
+                  "fullscreen_exit"
+              }
+            );
 
-        try {
+          if (response.data.terminated) {
+
+            alert(
+              "Interview ended due to cheating detection."
+            );
+
+            navigate("/thankyou");
+
+            return;
+          }
+
+          alert(
+            "Fullscreen exit detected."
+          );
 
           await document.documentElement
             .requestFullscreen();
+                
 
-        } catch (error) {
-
-          console.log(error);
-
-        }
-      }
-    };
-
-  document.addEventListener(
-
-    "fullscreenchange",
-
-    handleFullscreenChange
-  );
-
-  return () => {
-
-    document.removeEventListener(
-
-      "fullscreenchange",
-
-      handleFullscreenChange
-    );
-
-  };
-
-}, []);
+      }, []);
 
 useEffect(() => {
 
@@ -181,10 +175,31 @@ useEffect(() => {
 
     if (document.hidden) {
 
-      alert(
-        "Tab switching is not allowed during the interview."
-      );
+      const response =
+        await API.post(
 
+          `/interview/${sessionId}/violation`,
+
+          {
+            type:
+              "tab_switch"
+          }
+        );
+
+      if (response.data.terminated) {
+
+        alert(
+          "Interview ended due to cheating detection."
+        );
+
+        navigate("/thankyou");
+
+      } else {
+
+        alert(
+          "Tab switching detected."
+        );
+      }
     }
   };
 
@@ -369,35 +384,35 @@ const detectSilence = (stream) => {
   
     const stopRecording = async () => {
 
-  setIsRecording(false);
+        setIsRecording(false);
 
-  recognizerRef.current
-    .stopContinuousRecognitionAsync();
+        recognizerRef.current
+          .stopContinuousRecognitionAsync();
 
-  const transcript =
-    transcriptRef.current();
+        const transcript =
+          transcriptRef.current();
 
-  await API.post(
+        await API.post(
 
-    `/interview/${sessionId}/answer`,
+          `/interview/${sessionId}/answer`,
 
-    {
+          {
 
-      questionIndex:
-        currentQuestionIndex,
+            questionIndex:
+              currentQuestionIndex,
 
-      questionText:
-        questions[currentQuestionIndex]
-          .question,
+            questionText:
+              questions[currentQuestionIndex]
+                .question,
 
-      transcript
+            transcript
 
-    }
+          }
 
-  );
+        );
 
-  moveNextQuestion();
-};
+        moveNextQuestion();
+      };
   
     const uploadAnswer = async (audioBlob) => {
       try {
@@ -416,6 +431,32 @@ const detectSilence = (stream) => {
 
   
     const moveNextQuestion = async () => {
+      if (
+          currentQuestionIndex >= 2
+        ) {
+
+          const response =
+            await API.post(
+
+              `/interview/${sessionId}/generate-question`
+            );
+
+          setQuestions(prev => [
+
+            ...prev,
+
+            {
+              question:
+                response.data.question,
+
+              answer:
+                response.data.expectedAnswer,
+
+              aiGenerated: true
+            }
+          ]);
+        }
+
       if (currentQuestionIndex + 1 >= questions.length) {
 
         setStatus("Finalizing interview...");

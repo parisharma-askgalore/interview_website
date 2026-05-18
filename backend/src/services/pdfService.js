@@ -50,12 +50,70 @@ const generateInterviewPDF = (
     );
 
     doc.text(
-      `Position: ${session.candidate.position}`
+      `Role:
+      ${session.candidate.role}`
+    );
+
+    doc.moveDown(0.5);
+
+    doc.text(
+      `Violations:
+      ${session.violations.length}`
+    );
+
+    doc.moveDown(0.5);
+
+    doc.text(
+      `Termination:
+      ${session.terminationReason || "None"}`
     );
 
     doc.moveDown(2);
 
     // ANSWERS
+
+    doc
+      .fontSize(16)
+      .text("Violation Log");
+
+    doc.moveDown(1);
+
+    if (
+      session.violations.length === 0
+    ) {
+
+      doc
+        .fontSize(12)
+        .text("No violations detected");
+
+    } else {
+
+      session.violations.forEach(
+
+        (violation, index) => {
+
+          doc
+            .fontSize(12)
+            .text(
+
+              `
+              ${index + 1}.
+              ${violation.type}
+
+              Time:
+              ${new Date(
+                violation.timestamp
+              ).toLocaleString()}
+              `
+            );
+
+          doc.moveDown(0.5);
+
+        }
+      );
+    }
+
+    doc.moveDown(2);
 
     session.answers.forEach(
       (answer, index) => {
