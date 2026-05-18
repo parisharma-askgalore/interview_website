@@ -501,48 +501,75 @@ const detectSilence = (stream) => {
 
   
     const moveNextQuestion = async () => {
-      if (
-          currentQuestionIndex >= 2
-          &&
-          questions.length < 10
-        ) {
 
-          const response =
-            await API.post(
+  let updatedQuestions =
+    [...questions];
 
-              `/interview/${sessionId}/generate-question`
-            );
+  if (
+    currentQuestionIndex >= 2
+    &&
+    questions.length < TOTAL
+  ) {
 
-          setQuestions(prev => [
+    try {
 
-            ...prev,
-
-            {
-              question:
-                response.data.question,
-
-              answer:
-                response.data.expectedAnswer,
-
-              aiGenerated: true
-            }
-          ]);
-        }
-
-      if (currentQuestionIndex + 1 >= questions.length) {
-
-        setStatus("Finalizing interview...");
-
+      const response =
         await API.post(
-          `/interview/${sessionId}/complete`
+
+          `/interview/${sessionId}/generate-question`
         );
 
-        navigate("/thankyou");
+      const aiQuestion = {
 
-        return;
-      }
-      setCurrentQuestionIndex(prev => prev + 1);
-    };
+        question:
+          response.data.question,
+
+        answer:
+          response.data.expectedAnswer,
+
+        aiGenerated: true
+      };
+
+      updatedQuestions = [
+
+        ...questions,
+
+        aiQuestion
+      ];
+
+      setQuestions(updatedQuestions);
+
+    } catch (error) {
+
+      console.log(error);
+
+    }
+  }
+
+  if (
+    currentQuestionIndex + 1 >=
+    updatedQuestions.length
+  ) {
+
+    setStatus(
+      "Finalizing interview..."
+    );
+
+    await API.post(
+
+      `/interview/${sessionId}/complete`
+    );
+
+    navigate("/thankyou");
+
+    return;
+  }
+
+  setCurrentQuestionIndex(
+
+    prev => prev + 1
+  );
+};
   
     /* ── Loading screen ── */
     if (questions.length === 0) {
