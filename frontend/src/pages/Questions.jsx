@@ -158,8 +158,6 @@ useEffect(() => {
 
 }, []);
 
-enterFullscreen();
-
 useEffect(() => {
 
   window.history.pushState(
