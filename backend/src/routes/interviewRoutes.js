@@ -121,13 +121,61 @@ router.post(
         });
 
       const content =
-        completion.choices[0]
-          .message.content;
+  completion.choices[0]
+    .message.content;
 
-      const parsed =
-        JSON.parse(content);
+const responseText =
 
-      res.json(parsed);
+  typeof content === "string"
+
+    ? content
+
+    : content
+        ?.map(
+          item => item.text || ""
+        )
+        .join(" ")
+
+    || "";
+
+console.log("RAW QUESTION:");
+console.log(responseText);
+
+const cleaned =
+
+  responseText
+
+    .replace(/```json\s*/gi, "")
+
+    .replace(/```\s*/g, "")
+
+    .trim();
+
+console.log("CLEANED:");
+console.log(cleaned);
+
+let parsed;
+
+try {
+
+  parsed =
+    JSON.parse(cleaned);
+
+} catch (error) {
+
+  console.log(error);
+
+  parsed = {
+
+    question:
+      "Explain a difficult technical challenge you solved.",
+
+    expectedAnswer:
+      "Structured technical explanation with problem-solving approach."
+  };
+}
+
+res.json(parsed);
 
     } catch (error) {
 

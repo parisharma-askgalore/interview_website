@@ -586,7 +586,7 @@ const detectSilence = (stream) => {
     /* ── Progress values ── */
     const progressPct = ((currentQuestionIndex) / 10) * 100;
     /* SVG ring: circumference ≈ 176, dashoffset = 176 - (176 * fraction) */
-    const ringOffset  = 176 - (176 * (readingTime / TOTAL));
+    const ringOffset  = 176 - (176 * (readingTime / 5));
   
     /* ── Status area content ── */
     const renderStatus = () => {
@@ -636,7 +636,7 @@ const detectSilence = (stream) => {
               <div className={styles.progressFill} style={{ width: `${progressPct}%` }} />
             </div>
             <div className={styles.counter}>
-              Q{currentQuestionIndex + 1} <span>/ {questions.length}</span>
+              Q{currentQuestionIndex + 1} <span>/ 10</span>
             </div>
           </div>
   
