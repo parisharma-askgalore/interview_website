@@ -26,7 +26,7 @@ export default function StartForm() {
     email: "",
     role: ""
   });
-  
+
   const navigate = useNavigate();
 
   const handleChange = (e) => {
@@ -113,6 +113,9 @@ export default function StartForm() {
               </div>
     
               <div className={styles.field}>
+                <div className={styles.inputWrap}>
+                  <span className={styles.inputIcon}><IconBriefcase /></span>
+                </div>
                 <label className={styles.label}>
                     <select
                       className={styles.input}
@@ -145,9 +148,6 @@ export default function StartForm() {
                     </select>
                    <span className={styles.required}>*</span>
                 </label>
-                <div className={styles.inputWrap}>
-                  <span className={styles.inputIcon}><IconBriefcase /></span>
-                </div>
               </div>
     
               <div className={styles.divider} />

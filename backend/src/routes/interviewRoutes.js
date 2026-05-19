@@ -97,7 +97,8 @@ router.post(
               interview question for:
 
               ${role}
-
+              
+              It needs to be a one line question that a candidate can read within 5 seconds.
               Build upon previous answers.
 
               Also generate ideal answer.

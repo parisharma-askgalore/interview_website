@@ -87,13 +87,6 @@ export default function Thankyou() {
         {/* Info pills */}
         <div className={styles.pills}>
           <div className={styles.pill}>
-            <div className={styles.pillIcon}><IconMail /></div>
-            <div className={styles.pillText}>
-              <strong>Check your inbox</strong>
-              A confirmation has been sent to the email address you provided.
-            </div>
-          </div>
-          <div className={styles.pill}>
             <div className={styles.pillIcon}><IconClock /></div>
             <div className={styles.pillText}>
               <strong>Response time</strong>
