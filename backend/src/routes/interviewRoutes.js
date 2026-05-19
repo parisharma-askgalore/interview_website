@@ -376,10 +376,11 @@ console.log(responseText);
 
 const cleaned =
   responseText
-    .replace(/```json/g, "")
-    .replace(/```/g, "")
+    .replace(/```json\s*/g, "")
+    .replace(/```\s*/g, "")
     .trim();
-
+console.log("CLEANED:");
+console.log(cleaned);
 const parsed =
   JSON.parse(cleaned);
 

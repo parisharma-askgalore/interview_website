@@ -547,9 +547,9 @@ const detectSilence = (stream) => {
   }
 
   if (
-    currentQuestionIndex + 1 >=
-    updatedQuestions.length
-  ) {
+  currentQuestionIndex >=
+  TOTAL - 1
+) {
 
     setStatus(
       "Finalizing interview..."
@@ -584,7 +584,7 @@ const detectSilence = (stream) => {
     }
   
     /* ── Progress values ── */
-    const progressPct = ((currentQuestionIndex) / questions.length) * 100;
+    const progressPct = ((currentQuestionIndex) / 10) * 100;
     /* SVG ring: circumference ≈ 176, dashoffset = 176 - (176 * fraction) */
     const ringOffset  = 176 - (176 * (readingTime / TOTAL));
   
