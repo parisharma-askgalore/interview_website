@@ -110,11 +110,15 @@ useEffect(() => {
         !document.fullscreenElement
       ) {
 
+        alert(
+          "Fullscreen exit detected."
+        );
+
         setViolationCount(prev => {
 
           const updated = prev + 1;
 
-          if (updated >= 2) {
+          if (updated >= 1) {
 
             alert(
               "Interview ended due to cheating detection."
@@ -222,12 +226,15 @@ useEffect(() => {
   const handleVisibility = async () => {
 
     if (document.hidden) {
+      alert(
+          "Tab switching detected."
+        );
       
       setViolationCount(prev => {
 
       const updated = prev + 1;
 
-      if (updated >= 2) {
+      if (updated >= 1) {
 
         alert(
           "Interview ended due to cheating detection."
@@ -253,16 +260,15 @@ useEffect(() => {
       if (response.data.terminated) {
 
         alert(
+          "Tab switching detected."
+        );
+
+        alert(
           "Interview ended due to cheating detection."
         );
 
         navigate("/thankyou");
 
-      } else {
-
-        alert(
-          "Tab switching detected."
-        );
       }
     }
   };

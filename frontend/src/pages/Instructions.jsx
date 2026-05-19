@@ -91,6 +91,7 @@ export default function Instructions() {
                 <li>Disconnect your microphone while recording is active.</li>
                 <li>Use external audio playback or voice assistance tools.</li>
                 <li>Leave long periods of silence during recording.</li>
+                <li>IF YOU'RE FOUND IN VIOLATION OF ANY OF THESE, YOUR INTERVIEW WILL BE TERMINATED IMMEDIATELY AND YOUR OFFER WILL BE PULLED BACK SWIFTLY.</li>
               </ul>
             </section>
     
