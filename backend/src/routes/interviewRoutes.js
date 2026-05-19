@@ -550,7 +550,7 @@ router.post(
         });
 
       const pdfPath =
-        `src/reports/${session.sessionId}.pdf`;
+        `app/reports/${session.sessionId}.pdf`;
 
       let pending = true;
 
