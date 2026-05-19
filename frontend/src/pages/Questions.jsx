@@ -110,7 +110,24 @@ useEffect(() => {
         !document.fullscreenElement
       ) {
 
+        setViolationCount(prev => {
+
+          const updated = prev + 1;
+
+          if (updated >= 2) {
+
+            alert(
+              "Interview ended due to cheating detection."
+            );
+
+            navigate("/thankyou");
+          }
+
+          return updated;
+        });
+
         const response =
+
           await API.post(
 
             `/interview/${sessionId}/violation`,
@@ -135,6 +152,10 @@ useEffect(() => {
         }
 
         setFullscreenWarning(true);
+
+        alert(
+          "Fullscreen exit detected."
+        );
       }
     };
 
@@ -145,45 +166,6 @@ useEffect(() => {
     handleFullscreenChange
   );
 
-  if (fullscreenWarning) {
-
-  return (
-
-    <div className={styles.page}>
-
-      <div className={styles.card}>
-
-        <h2>
-          Fullscreen Required
-        </h2>
-
-        <p>
-          Please re-enter fullscreen
-          mode to continue the
-          interview.
-        </p>
-
-        <button
-
-          onClick={async () => {
-
-            await document
-              .documentElement
-              .requestFullscreen();
-
-            setFullscreenWarning(
-              false
-            );
-          }}
-        >
-          Re-enter Fullscreen
-        </button>
-
-      </div>
-
-    </div>
-  );
-}
 
   return () => {
 
@@ -240,6 +222,22 @@ useEffect(() => {
   const handleVisibility = async () => {
 
     if (document.hidden) {
+      
+      setViolationCount(prev => {
+
+      const updated = prev + 1;
+
+      if (updated >= 2) {
+
+        alert(
+          "Interview ended due to cheating detection."
+        );
+
+        navigate("/thankyou");
+      }
+
+      return updated;
+    });
 
       const response =
         await API.post(
@@ -382,6 +380,15 @@ const startRecording = async () => {
       () => finalTranscript;
 
     setIsRecording(true);
+
+    const stream =
+      await navigator.mediaDevices
+        .getUserMedia({
+
+          audio: true
+        });
+
+    detectSilence(stream);
 
   } catch (error) {
 
@@ -625,6 +632,48 @@ const detectSilence = (stream) => {
         </div>
       );
     };
+
+if (fullscreenWarning) {
+
+  return (
+
+    <div className={styles.page}>
+
+      <div className={styles.card}>
+
+        <h2>
+          Fullscreen Required
+        </h2>
+
+        <p>
+          Please re-enter fullscreen
+          mode to continue the
+          interview.
+        </p>
+
+        <button
+
+          className={styles.stopBtn}
+
+          onClick={async () => {
+
+            await document
+              .documentElement
+              .requestFullscreen();
+
+            setFullscreenWarning(
+              false
+            );
+          }}
+        >
+          Re-enter Fullscreen
+        </button>
+
+      </div>
+
+    </div>
+  );
+}
   
     return (
       <div className={styles.page}>
