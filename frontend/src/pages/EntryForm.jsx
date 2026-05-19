@@ -113,41 +113,47 @@ export default function StartForm() {
               </div>
     
               <div className={styles.field}>
-                <div className={styles.inputWrap}>
-                  <span className={styles.inputIcon}><IconBriefcase /></span>
-                </div>
-                <label className={styles.label}>
-                    <select
-                      className={styles.input}
-                      name="role"
-                      value={formData.role || ""}
-                      onChange={handleChange}
-                      required
-                    >
-
-                      <option value="">
-                        Select Role
-                      </option>
-
-                      <option value="AI/ML Intern">
-                        AI/ML Intern
-                      </option>
-
-                      <option value="AI/ML Engineer">
-                        AI/ML Engineer
-                      </option>
-
-                      <option value="DevOps Engineer">
-                        DevOps Engineer
-                      </option>
-
-                      <option value="AI/ML Fintech Engineer">
-                        AI/ML Fintech Engineer
-                      </option>
-
-                    </select>
-                   <span className={styles.required}>*</span>
+                <label className={styles.label}>Role
+                  <span className={styles.required}>*</span>
                 </label>
+
+                <div className={styles.inputWrap}>
+
+                  <span className={styles.inputIcon}>
+                    <IconBriefcase />
+                  </span>
+
+                  <select
+                    className={styles.input}
+                    name="role"
+                    value={formData.role || ""}
+                    onChange={handleChange}
+                    required
+                  >
+
+                    <option value="">
+                      Select Role
+                    </option>
+
+                    <option value="AI/ML Intern">
+                      AI/ML Intern
+                    </option>
+
+                    <option value="AI/ML Engineer">
+                      AI/ML Engineer
+                    </option>
+
+                    <option value="DevOps Engineer">
+                      DevOps Engineer
+                    </option>
+
+                    <option value="AI/ML Fintech Engineer">
+                      AI/ML Fintech Engineer
+                    </option>
+
+                  </select>
+
+                </div>
               </div>
     
               <div className={styles.divider} />
