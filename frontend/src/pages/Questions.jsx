@@ -37,6 +37,7 @@ function Questions() {
 
   const [totalTimer, setTotalTimer] = useState(0);
   const [liveTranscript, setLiveTranscript] = useState("");
+  const [speaking, setSpeaking] = useState(false);
 
   const TOTAL = 10;
 
@@ -249,6 +250,48 @@ function Questions() {
       }
     }, 1000);
   };
+
+  const playAIQuestion = async (text) => {
+  try {
+    const response = await fetch(
+      "http://localhost:5000/api/tts",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ text }),
+      }
+    );
+
+    const audioBlob = await response.blob();
+
+    const audioUrl = URL.createObjectURL(audioBlob);
+
+    const audio = new Audio(audioUrl);
+
+    audio.onplay = () => {
+      setSpeaking(true);
+    };
+
+    audio.onended = () => {
+      setSpeaking(false);
+
+      URL.revokeObjectURL(audioUrl);
+    };
+
+    audio.preload = "auto";
+    await audio.play();
+  } catch (error) {
+    console.error(error);
+  }
+};
+
+useEffect(() => {
+  if (currentQuestion) {
+    playAIQuestion(currentQuestion.question);
+  }
+}, [currentQuestion]);
 
   const startRecording = async () => {
     setLiveTranscript("");
@@ -578,7 +621,7 @@ function Questions() {
             Q{currentQuestionIndex + 1} <span>/ 10</span>
           </div>
         </div>
-
+        <InterviewStage speaking={speaking} />
         {/* Question */}
         <p className={styles.questionLabel}>
           {

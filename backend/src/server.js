@@ -2,6 +2,7 @@ import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
 import interviewRoutes from "./routes/interviewRoutes.js";
+import ttsRoutes from "./routes/tts.js";
 
 import connectDB from "./config/db.js";
 
@@ -10,6 +11,8 @@ dotenv.config();
 connectDB();
 
 const app = express();
+
+app.use("/api/tts", ttsRoutes);
 
 app.use(cors());
 
