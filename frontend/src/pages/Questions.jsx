@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import API from "../api/interviewApi";
 import { useNavigate } from "react-router-dom";
 import styles from "../components/Questions.module.css";
+import InterviewStage from "../components/interview/InterviewStage";
 
 import * as sdk from "microsoft-cognitiveservices-speech-sdk";
 
@@ -40,6 +41,8 @@ function Questions() {
   const [speaking, setSpeaking] = useState(false);
 
   const TOTAL = 10;
+
+  const currentQuestion = questions[currentQuestionIndex];
 
   const recognizerRef = useRef(null);
   const transcriptRef = useRef(null);
