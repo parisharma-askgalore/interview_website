@@ -3,8 +3,7 @@ import API from "../api/interviewApi";
 import { useNavigate } from "react-router-dom";
 import styles from "../components/Questions.module.css";
 
-import * as sdk from
-"microsoft-cognitiveservices-speech-sdk";
+import * as sdk from "microsoft-cognitiveservices-speech-sdk";
 
 const IconMic = () => (
   <svg className={styles.micIcon} width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -20,705 +19,511 @@ const IconStop = () => (
   </svg>
 );
 
+// Violation threshold before the interview is terminated
+const VIOLATION_LIMIT = 3;
 
 function Questions() {
-    const navigate = useNavigate();
+  const navigate = useNavigate();
 
-const [questions, setQuestions] = useState([]);
+  const [questions, setQuestions] = useState([]);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [readingTime, setReadingTime] = useState(5);
+  const [isRecording, setIsRecording] = useState(false);
+  const [status, setStatus] = useState("Loading questions...");
+  const [isGeneratingQuestion, setIsGeneratingQuestion] = useState(false);
+  const [violationCount, setViolationCount] = useState(0);
+  const [fullscreenWarning, setFullscreenWarning] = useState(false);
 
-const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const TOTAL = 10;
 
-const [readingTime, setReadingTime] = useState(5);
+  const recognizerRef = useRef(null);
+  const transcriptRef = useRef(null);
+  const streamRef = useRef(null);
+  const silenceTimeoutRef = useRef(null);
+  const analyserRef = useRef(null);
+  const audioContextRef = useRef(null);
+  const timerIntervalRef = useRef(null);
+  const recordingTimeoutRef = useRef(null);
 
-const [isRecording, setIsRecording] = useState(false);
+  // FIX 3: Ref that mirrors isRecording state so closures (e.g. detectSilence)
+  // always read the current value instead of a stale snapshot.
+  const isRecordingRef = useRef(false);
 
-const [status, setStatus] = useState("Loading questions...");
+  // FIX 5: Guard against missing sessionId — redirect to home if not found.
+  const sessionId = localStorage.getItem("sessionId");
 
-const TOTAL = 10;
-
-const mediaRecorderRef = useRef(null);
-
-const recognizerRef = useRef(null);
-
-const transcriptRef = useRef(null);
-
-const audioChunksRef = useRef([]);
-
-const streamRef = useRef(null);
-
-const silenceTimeoutRef = useRef(null);
-
-const analyserRef = useRef(null);
-
-const audioContextRef = useRef(null);
-
-const sessionId = localStorage.getItem("sessionId");
-
-const [violationCount,
-setViolationCount] =
-useState(0);
-
-const [
-  fullscreenWarning,
-  setFullscreenWarning
-] = useState(false);
-
-useEffect(() => {
-
-  fetchQuestions();
-
-}, []);
-
-useEffect(() => {
-
-  if (questions.length > 0) {
-
-    startReadingTimer();
-
-  }
-
-}, [questions, currentQuestionIndex]);
-
-useEffect(() => {
-
-  const enterFullscreen = async () => {
-
-    try {
-
-      if (
-        !document.fullscreenElement
-      ) {
-
-        await document.documentElement
-          .requestFullscreen();
-
-      }
-
-    } catch (error) {
-
-      console.log(error);
-
+  useEffect(() => {
+    if (!sessionId) {
+      navigate("/");
+      return;
     }
-  };
+    fetchQuestions();
+  }, []);
 
-  enterFullscreen();
+  useEffect(() => {
+    if (questions.length > 0) {
+      startReadingTimer();
+    }
 
-  const handleFullscreenChange =
-    async () => {
-
-      if (
-        !document.fullscreenElement
-      ) {
-
-        alert(
-          "Fullscreen exit detected."
-        );
-
-        setViolationCount(prev => {
-
-          const updated = prev + 1;
-
-          if (updated >= 1) {
-
-            alert(
-              "Interview ended due to cheating detection."
-            );
-
-            navigate("/thankyou");
-          }
-
-          return updated;
-        });
-
-        const response =
-
-          await API.post(
-
-            `/interview/${sessionId}/violation`,
-
-            {
-              type:
-                "fullscreen_exit"
-            }
-          );
-
-        if (
-          response.data.terminated
-        ) {
-
-          alert(
-            "Interview ended due to cheating detection."
-          );
-
-          navigate("/thankyou");
-
-          return;
-        }
-
-        setFullscreenWarning(true);
-
-        alert(
-          "Fullscreen exit detected."
-        );
-      }
+    return () => {
+      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+      if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current);
+      if (recordingTimeoutRef.current) clearTimeout(recordingTimeoutRef.current);
     };
+  }, [questions, currentQuestionIndex]);
 
-  document.addEventListener(
-
-    "fullscreenchange",
-
-    handleFullscreenChange
-  );
-
-
-  return () => {
-
-    document.removeEventListener(
-
-      "fullscreenchange",
-
-      handleFullscreenChange
-    );
-
-  };
-
-}, []);
-
-useEffect(() => {
-
-  window.history.pushState(
-    null,
-    "",
-    window.location.href
-  );
-
-  const handleBackButton = () => {
-
-    alert(
-      "Back navigation is disabled during the interview."
-    );
-
-    window.history.pushState(
-      null,
-      "",
-      window.location.href
-    );
-  };
-
-  window.addEventListener(
-    "popstate",
-    handleBackButton
-  );
-
-  return () => {
-
-    window.removeEventListener(
-      "popstate",
-      handleBackButton
-    );
-
-  };
-
-}, []);
-
-useEffect(() => {
-
-  const handleVisibility = async () => {
-
-    if (document.hidden) {
-      alert(
-          "Tab switching detected."
-        );
-      
-      setViolationCount(prev => {
-
-      const updated = prev + 1;
-
-      if (updated >= 1) {
-
-        alert(
-          "Interview ended due to cheating detection."
-        );
-
-        navigate("/thankyou");
-      }
-
-      return updated;
-    });
-
-      const response =
-        await API.post(
-
-          `/interview/${sessionId}/violation`,
-
-          {
-            type:
-              "tab_switch"
-          }
-        );
-
-      if (response.data.terminated) {
-
-        alert(
-          "Tab switching detected."
-        );
-
-        alert(
-          "Interview ended due to cheating detection."
-        );
-
-        navigate("/thankyou");
-
-      }
-    }
-  };
-
-  document.addEventListener(
-    "visibilitychange",
-    handleVisibility
-  );
-
-  return () => {
-
-    document.removeEventListener(
-      "visibilitychange",
-      handleVisibility
-    );
-
-  };
-
-}, []);
-
-const fetchQuestions = async () => {
-
-  try {
-
-    const response =
-      await API.get("/interview/questions");
-
-    setQuestions(response.data);
-
-  } catch (error) {
-
-    console.log(error);
-
-  }
-};
-
-const startReadingTimer = () => {
-
-  setReadingTime(5);
-
-  setStatus("Read the question carefully");
-
-  let timer = 5;
-
-  const interval = setInterval(() => {
-
-    timer--;
-
-    setReadingTime(timer);
-
-    if (timer <= 0) {
-
-      clearInterval(interval);
-
-      startRecording();
-
-    }
-
-  }, 1000);
-};
-
-const startRecording = async () => {
-
-  try {
-
-    const speechConfig =
-      sdk.SpeechConfig.fromSubscription(
-
-        import.meta.env.VITE_AZURE_SPEECH_KEY,
-
-        "centralindia"
-      );
-
-    speechConfig.speechRecognitionLanguage =
-      "en-US";
-
-    const audioConfig =
-      sdk.AudioConfig.fromDefaultMicrophoneInput();
-
-    const recognizer =
-      new sdk.SpeechRecognizer(
-
-        speechConfig,
-
-        audioConfig
-      );
-
-    let finalTranscript = "";
-
-    recognizer.recognizing = (s, e) => {
-
-      console.log("Partial:", e.result.text);
-
-    };
-
-    recognizer.recognized = (s, e) => {
-
-      if (
-        e.result.reason ===
-        sdk.ResultReason.RecognizedSpeech
-      ) {
-
-        finalTranscript +=
-          " " + e.result.text;
-
-      }
-    };
-
-    recognizer.startContinuousRecognitionAsync();
-
-    recognizerRef.current =
-      recognizer;
-
-    transcriptRef.current =
-      () => finalTranscript;
-
-    setIsRecording(true);
-
-    const stream =
-      await navigator.mediaDevices
-        .getUserMedia({
-
-          audio: true
-        });
-
-    detectSilence(stream);
-
-  } catch (error) {
-
-    console.log(error);
-
-  }
-};
-
-const detectSilence = (stream) => {
-
-  const audioContext = new AudioContext();
-
-  audioContextRef.current =
-    audioContext;
-
-  const analyser =
-    audioContext.createAnalyser();
-
-  analyserRef.current = analyser;
-
-  const microphone =
-    audioContext.createMediaStreamSource(stream);
-
-  microphone.connect(analyser);
-
-  const dataArray =
-    new Uint8Array(analyser.frequencyBinCount);
-
-  let voiceDetected = false;
-
-  silenceTimeoutRef.current =
-    setTimeout(() => {
-
-      if (!voiceDetected) {
-
-        stopRecording();
-
-      }
-
-    }, 5000);
-
-  const checkVoice = () => {
-
-    analyser.getByteFrequencyData(dataArray);
-
-    const volume =
-      dataArray.reduce((a, b) => a + b, 0);
-
-    if (volume > 1000) {
-
-      voiceDetected = true;
-
-      clearTimeout(silenceTimeoutRef.current);
-
-    }
-
-    if (isRecording) {
-
-      requestAnimationFrame(checkVoice);
-
-    }
-  };
-
-  checkVoice();
-};
-  
-    const stopRecording = async () => {
-
-        setIsRecording(false);
-
-        recognizerRef.current
-          .stopContinuousRecognitionAsync();
-
-        const transcript =
-          transcriptRef.current();
-
-        await API.post(
-
-          `/interview/${sessionId}/answer`,
-
-          {
-
-            questionIndex:
-              currentQuestionIndex,
-
-            questionText:
-              questions[currentQuestionIndex]
-                .question,
-
-            transcript,
-
-            expectedAnswer:
-              questions[currentQuestionIndex]
-                .answer
-
-          }
-
-        );
-
-        moveNextQuestion();
-      };
-  
-    const uploadAnswer = async (audioBlob) => {
+  useEffect(() => {
+    const enterFullscreen = async () => {
       try {
-        const formData = new FormData();
-        formData.append("audio", audioBlob);
-        formData.append("questionIndex", currentQuestionIndex);
-        formData.append("questionText", questions[currentQuestionIndex].question);
-        await API.post(`/interview/${sessionId}/answer`, formData, {
-          headers: { "Content-Type": "multipart/form-data" }
-        });
-        moveNextQuestion();
+        if (!document.fullscreenElement) {
+          await document.documentElement.requestFullscreen();
+        }
       } catch (error) {
         console.log(error);
       }
     };
 
-  
-    const moveNextQuestion = async () => {
+    enterFullscreen();
 
-  let updatedQuestions =
-    [...questions];
+    const handleFullscreenChange = async () => {
+      if (!document.fullscreenElement) {
+        // FIX 2: Only one alert for fullscreen exit (removed the duplicate at the bottom).
+        // FIX 4: Only terminate after VIOLATION_LIMIT violations, not on the very first one.
+        setViolationCount(prev => {
+          const updated = prev + 1;
 
-  if (
-    currentQuestionIndex >= 2
-    &&
-    questions.length < TOTAL
-  ) {
+          if (updated >= VIOLATION_LIMIT) {
+            alert("Interview ended due to repeated violations.");
+            setTimeout(() => navigate("/thankyou"), 0);
+          } else {
+            alert(`Fullscreen exit detected. Warning ${updated}/${VIOLATION_LIMIT}.`);
+          }
+
+          return updated;
+        });
+
+        try {
+          const response = await API.post(
+            `/interview/${sessionId}/violation`,
+            { type: "fullscreen_exit" }
+          );
+
+          if (response.data.terminated) {
+            alert("Interview ended due to cheating detection.");
+            setTimeout(() => navigate("/thankyou"), 0);
+            return;
+          }
+        } catch (error) {
+          console.error("Violation error:", error);
+        }
+
+        setFullscreenWarning(true);
+      }
+    };
+
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    window.history.pushState(null, "", window.location.href);
+
+    const handleBackButton = () => {
+      alert("Back navigation is disabled during the interview.");
+      window.history.pushState(null, "", window.location.href);
+    };
+
+    window.addEventListener("popstate", handleBackButton);
+
+    return () => {
+      window.removeEventListener("popstate", handleBackButton);
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleVisibility = async () => {
+      if (document.hidden) {
+        // FIX 2 & 4: Single alert, only terminate after VIOLATION_LIMIT violations.
+        setViolationCount(prev => {
+          const updated = prev + 1;
+
+          if (updated >= VIOLATION_LIMIT) {
+            alert("Interview ended due to repeated violations.");
+            setTimeout(() => navigate("/thankyou"), 0);
+          } else {
+            alert(`Tab switching detected. Warning ${updated}/${VIOLATION_LIMIT}.`);
+          }
+
+          return updated;
+        });
+
+        try {
+          const response = await API.post(
+            `/interview/${sessionId}/violation`,
+            { type: "tab_switch" }
+          );
+
+          if (response.data.terminated) {
+            alert("Interview ended due to cheating detection.");
+            setTimeout(() => navigate("/thankyou"), 0);
+          }
+        } catch (error) {
+          console.error("Violation error:", error);
+        }
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, []);
+
+  const fetchQuestions = async () => {
+    try {
+      const response = await API.get("/interview/questions");
+      setQuestions(response.data);
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
+  const startReadingTimer = () => {
+    setReadingTime(5);
+    setStatus("Read the question carefully");
+
+    let timer = 5;
+
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current);
+    }
+
+    timerIntervalRef.current = setInterval(() => {
+      timer--;
+      setReadingTime(timer);
+
+      if (timer <= 0) {
+        clearInterval(timerIntervalRef.current);
+        startRecording();
+      }
+    }, 1000);
+  };
+
+  const startRecording = async () => {
+    try {
+      const speechConfig = sdk.SpeechConfig.fromSubscription(
+        import.meta.env.VITE_AZURE_SPEECH_KEY,
+        "centralindia"
+      );
+
+      speechConfig.speechRecognitionLanguage = "en-US";
+
+      const audioConfig = sdk.AudioConfig.fromDefaultMicrophoneInput();
+
+      const recognizer = new sdk.SpeechRecognizer(speechConfig, audioConfig);
+
+      let finalTranscript = "";
+
+      recognizer.recognizing = (s, e) => {
+        console.log("Partial:", e.result.text);
+      };
+
+      recognizer.recognized = (s, e) => {
+        if (e.result.reason === sdk.ResultReason.RecognizedSpeech) {
+          finalTranscript += " " + e.result.text;
+        }
+      };
+
+      recognizer.startContinuousRecognitionAsync();
+
+      recognizerRef.current = recognizer;
+      transcriptRef.current = () => finalTranscript;
+
+      // FIX 3: Keep the ref in sync when setting recording state to true.
+      isRecordingRef.current = true;
+      setIsRecording(true);
+
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+
+      detectSilence(stream);
+
+      // 30-second timeout fallback
+      recordingTimeoutRef.current = setTimeout(() => {
+        if (isRecordingRef.current) {
+          console.warn("Recording timeout - auto-submitting answer");
+          stopRecording();
+        }
+      }, 30000);
+    } catch (error) {
+      console.error("Error starting recording:", error);
+      isRecordingRef.current = false;
+      setIsRecording(false);
+      setStatus("Microphone error - retrying...");
+
+      setTimeout(() => {
+        startRecording();
+      }, 2000);
+    }
+  };
+
+  const detectSilence = (stream) => {
+    try {
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      audioContextRef.current = audioContext;
+
+      const analyser = audioContext.createAnalyser();
+      analyserRef.current = analyser;
+
+      const microphone = audioContext.createMediaStreamSource(stream);
+      microphone.connect(analyser);
+
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+      let voiceDetected = false;
+
+      silenceTimeoutRef.current = setTimeout(() => {
+        if (!voiceDetected) {
+          stopRecording();
+        }
+      }, 5000);
+
+      const checkVoice = () => {
+        analyser.getByteFrequencyData(dataArray);
+
+        const volume = dataArray.reduce((a, b) => a + b, 0);
+
+        if (volume > 1000) {
+          voiceDetected = true;
+          clearTimeout(silenceTimeoutRef.current);
+        }
+
+        // FIX 3: Use isRecordingRef.current instead of the stale isRecording
+        // state variable so the rAF loop keeps running correctly after mount.
+        if (isRecordingRef.current) {
+          requestAnimationFrame(checkVoice);
+        }
+      };
+
+      checkVoice();
+    } catch (error) {
+      console.error("Error in detectSilence:", error);
+    }
+  };
+
+  const stopRecording = async () => {
+    // FIX 3: Keep ref in sync when stopping.
+    isRecordingRef.current = false;
+    setIsRecording(false);
+
+    if (recordingTimeoutRef.current) {
+      clearTimeout(recordingTimeoutRef.current);
+    }
+
+    if (recognizerRef.current) {
+      recognizerRef.current.stopContinuousRecognitionAsync();
+    }
+
+    const transcript = transcriptRef.current ? transcriptRef.current() : "";
+
+    const currentQuestion = questions[currentQuestionIndex];
+
+    if (!currentQuestion) {
+      console.error("Current question not found");
+      return;
+    }
 
     try {
+      await API.post(`/interview/${sessionId}/answer`, {
+        questionIndex: currentQuestionIndex,
+        questionText: currentQuestion.question,
+        transcript,
+        expectedAnswer: currentQuestion.answer,
+      });
+    } catch (error) {
+      console.error("Error submitting answer:", error);
+    }
 
-      const response =
-        await API.post(
+    moveNextQuestion();
+  };
 
+  // FIX 1: Removed dead uploadAnswer function and unused mediaRecorderRef /
+  // audioChunksRef — the Azure Speech SDK transcript path is the active one.
+
+  const moveNextQuestion = async () => {
+    const nextIndex = currentQuestionIndex + 1;
+
+    if (nextIndex >= TOTAL) {
+      setStatus("Completing interview...");
+
+      try {
+        await API.post(`/interview/${sessionId}/complete`);
+        setTimeout(() => navigate("/thankyou"), 500);
+      } catch (error) {
+        console.error("Error completing interview:", error);
+        setTimeout(() => navigate("/thankyou"), 500);
+      }
+      return;
+    }
+
+    if (currentQuestionIndex >= 1 && questions.length < nextIndex + 1) {
+      setIsGeneratingQuestion(true);
+      try {
+        const response = await API.post(
           `/interview/${sessionId}/generate-question`
         );
 
-      const aiQuestion = {
+        const aiQuestion = {
+          question: response.data.question,
+          answer: response.data.expectedAnswer,
+          aiGenerated: true,
+        };
 
-        question:
-          response.data.question,
-
-        answer:
-          response.data.expectedAnswer,
-
-        aiGenerated: true
-      };
-
-      updatedQuestions = [
-
-        ...questions,
-
-        aiQuestion
-      ];
-
-      setQuestions(updatedQuestions);
-
-    } catch (error) {
-
-      console.log(error);
-
-    }
-  }
-
-  if (
-  currentQuestionIndex >=
-  TOTAL - 1
-) {
-
-    setStatus(
-      "Finalizing interview..."
-    );
-
-    await API.post(
-
-      `/interview/${sessionId}/complete`
-    );
-
-    navigate("/thankyou");
-
-    return;
-  }
-
-  setCurrentQuestionIndex(
-
-    prev => prev + 1
-  );
-};
-  
-    /* ── Loading screen ── */
-    if (questions.length === 0) {
-      return (
-        <div className={styles.page}>
-          <div className={styles.loading}>
-            <div className={styles.loadingSpinner} />
-            Loading questions…
-          </div>
-        </div>
-      );
-    }
-  
-    /* ── Progress values ── */
-    const progressPct = ((currentQuestionIndex) / 10) * 100;
-    /* SVG ring: circumference ≈ 176, dashoffset = 176 - (176 * fraction) */
-    const ringOffset  = 176 - (176 * (readingTime / 5));
-  
-    /* ── Status area content ── */
-    const renderStatus = () => {
-      if (status === "Processing answer") {
-        return (
-          <div className={styles.processingWrap}>
-            <div className={styles.processingSpinner} />
-            <span className={styles.processingLabel}>Processing your answer…</span>
-          </div>
-        );
+        setQuestions(prev => [...prev, aiQuestion]);
+        setIsGeneratingQuestion(false);
+      } catch (error) {
+        console.log("Error generating question:", error);
+        setIsGeneratingQuestion(false);
       }
-      if (isRecording) {
-        return (
-          <div className={styles.recordingWrap}>
-            <div className={styles.micRing}><IconMic /></div>
-            <span className={styles.recordingLabel}>
-              <span className={styles.recDot} /> Recording
-            </span>
-          </div>
-        );
-      }
-      return (
-        <div className={styles.countdownWrap}>
-          <div className={styles.ring}>
-            <svg width="64" height="64" viewBox="0 0 64 64">
-              <circle className={styles.ringTrack} cx="32" cy="32" r="28" />
-              <circle
-                className={styles.ringFill}
-                cx="32" cy="32" r="28"
-                style={{ strokeDashoffset: ringOffset }}
-              />
-            </svg>
-            <div className={styles.ringNumber}>{readingTime}</div>
-          </div>
-          <span className={styles.countdownLabel}>Recording begins in…</span>
+    }
+
+    setCurrentQuestionIndex(nextIndex);
+  };
+
+  /* ── Loading screen ── */
+  if (questions.length === 0) {
+    return (
+      <div className={styles.page}>
+        <div className={styles.loading}>
+          <div className={styles.loadingSpinner} />
+          Loading questions…
         </div>
-      );
-    };
-
-if (fullscreenWarning) {
-
-  return (
-
-    <div className={styles.page}>
-
-      <div className={styles.card}>
-
-        <h2>
-          Fullscreen Required
-        </h2>
-
-        <p>
-          Please re-enter fullscreen
-          mode to continue the
-          interview.
-        </p>
-
-        <button
-
-          className={styles.stopBtn}
-
-          onClick={async () => {
-
-            await document
-              .documentElement
-              .requestFullscreen();
-
-            setFullscreenWarning(
-              false
-            );
-          }}
-        >
-          Re-enter Fullscreen
-        </button>
-
       </div>
+    );
+  }
 
-    </div>
-  );
-}
-  
+  /* ── Progress values ── */
+  const progressPct = ((currentQuestionIndex + 1) / 10) * 100;
+  const ringOffset = 176 - (176 * (readingTime / 5));
+
+  /* ── Status area content ── */
+  const renderStatus = () => {
+    if (status === "Completing interview...") {
+      return (
+        <div className={styles.processingWrap}>
+          <div className={styles.processingSpinner} />
+          <span className={styles.processingLabel}>
+            Thank you for your time! Hold on while we upload your answers…
+          </span>
+        </div>
+      );
+    }
+    if (isGeneratingQuestion) {
+      return (
+        <div className={styles.processingWrap}>
+          <div className={styles.processingSpinner} />
+          <span className={styles.processingLabel}>Loading next question…</span>
+        </div>
+      );
+    }
+    if (status === "Processing answer") {
+      return (
+        <div className={styles.processingWrap}>
+          <div className={styles.processingSpinner} />
+          <span className={styles.processingLabel}>Processing your answer…</span>
+        </div>
+      );
+    }
+    if (isRecording) {
+      return (
+        <div className={styles.recordingWrap}>
+          <div className={styles.micRing}><IconMic /></div>
+          <span className={styles.recordingLabel}>
+            <span className={styles.recDot} /> Recording
+          </span>
+        </div>
+      );
+    }
+    return (
+      <div className={styles.countdownWrap}>
+        <div className={styles.ring}>
+          <svg width="64" height="64" viewBox="0 0 64 64">
+            <circle className={styles.ringTrack} cx="32" cy="32" r="28" />
+            <circle
+              className={styles.ringFill}
+              cx="32" cy="32" r="28"
+              style={{ strokeDashoffset: ringOffset }}
+            />
+          </svg>
+          <div className={styles.ringNumber}>{readingTime}</div>
+        </div>
+        <span className={styles.countdownLabel}>Recording begins in…</span>
+      </div>
+    );
+  };
+
+  if (fullscreenWarning) {
     return (
       <div className={styles.page}>
         <div className={styles.card}>
-  
-          {/* Progress bar */}
-          <div className={styles.topBar}>
-            <div className={styles.progressTrack}>
-              <div className={styles.progressFill} style={{ width: `${progressPct}%` }} />
-            </div>
-            <div className={styles.counter}>
-              Q{currentQuestionIndex + 1} <span>/ 10</span>
-            </div>
-          </div>
-  
-          {/* Question */}
-          <p className={styles.questionLabel}>Question {currentQuestionIndex + 1}</p>
-          <h2 className={styles.questionText}>
-            {questions[currentQuestionIndex].question}
-          </h2>
-  
-          {/* Status area */}
-          <div className={styles.statusArea}>
-            {renderStatus()}
-          </div>
-  
-          {/* Stop & Next button — only shown while recording */}
-          {isRecording && (
-            <button className={styles.stopBtn} onClick={stopRecording}>
-              <span className={styles.btnInner}>
-                <IconStop />
-                Stop Recording &amp; Next
-              </span>
-            </button>
-          )}
-  
+          <h2>Fullscreen Required</h2>
+          <p>Please re-enter fullscreen mode to continue the interview.</p>
+          <button
+            className={styles.stopBtn}
+            onClick={async () => {
+              await document.documentElement.requestFullscreen();
+              setFullscreenWarning(false);
+            }}
+          >
+            Re-enter Fullscreen
+          </button>
         </div>
       </div>
     );
+  }
+
+  return (
+    <div className={styles.page}>
+      <div className={styles.card}>
+
+        {/* Progress bar */}
+        <div className={styles.topBar}>
+          <div className={styles.progressTrack}>
+            <div className={styles.progressFill} style={{ width: `${progressPct}%` }} />
+          </div>
+          <div className={styles.counter}>
+            Q{currentQuestionIndex + 1} <span>/ 10</span>
+          </div>
+        </div>
+
+        {/* Question */}
+        <p className={styles.questionLabel}>Question {currentQuestionIndex + 1}</p>
+        <h2 className={styles.questionText}>
+          {questions[currentQuestionIndex]?.question || "Loading next question..."}
+        </h2>
+
+        {/* Status area */}
+        <div className={styles.statusArea}>
+          {renderStatus()}
+        </div>
+
+        {/* Stop & Next button — only shown while recording */}
+        {isRecording && (
+          <button className={styles.stopBtn} onClick={stopRecording}>
+            <span className={styles.btnInner}>
+              <IconStop />
+              Stop Recording &amp; Next
+            </span>
+          </button>
+        )}
+
+      </div>
+    </div>
+  );
 }
 
 export default Questions;

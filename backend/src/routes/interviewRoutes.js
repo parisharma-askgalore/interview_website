@@ -212,6 +212,16 @@ router.post(
             req.params.sessionId
         });
       
+      if (!session) {
+        return res.status(404).json({
+          message: "Session not found"
+        });
+      }
+
+      // Ensure violations array exists
+      if (!session.violations) {
+        session.violations = [];
+      }
 
       session.violations.push({
 
@@ -242,6 +252,8 @@ router.post(
       });
 
     } catch (error) {
+
+      console.error("Violation endpoint error:", error);
 
       res.status(500).json({
         message: error.message
@@ -597,40 +609,52 @@ while (pending) {
 
   });
 
+      console.log("Generating PDF for session:", req.params.sessionId);
+      console.log("PDF Path:", pdfPath);
+
       await generateInterviewPDF(
         finalSession,
         pdfPath
       );
 
-      await transporter.sendMail({
+      console.log("PDF generated successfully");
+      console.log("Attempting to send email to:", process.env.HR_EMAIL);
 
-        from:
-          process.env.HR_EMAIL,
+      try {
+        const info = await transporter.sendMail({
 
-        to:
-          process.env.HR_EMAIL,
+          from:
+            process.env.HR_EMAIL,
 
-        subject:
-          `Interview Report - ${finalSession.candidate.name}`,
+          to:
+            process.env.HR_EMAIL,
 
-        text:
-          `
-          Interview completed.
+          subject:
+            `Interview Report - ${finalSession.candidate.name}`,
 
-          Candidate:
-          ${finalSession.candidate.name}
-          `,
+          text:
+            `
+            Interview completed.
 
-        attachments: [
-          {
-            filename:
-              "interview-report.pdf",
+            Candidate:
+            ${finalSession.candidate.name}
+            `,
 
-            path:
-              pdfPath
-          }
-        ]
-      });
+          attachments: [
+            {
+              filename:
+                "interview-report.pdf",
+
+              path:
+                pdfPath
+            }
+          ]
+        });
+
+        console.log("Email sent successfully:", info.response);
+      } catch (emailError) {
+        console.error("Error sending email:", emailError);
+      }
 
       res.json({
         success: true
