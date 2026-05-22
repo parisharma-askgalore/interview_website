@@ -23,12 +23,12 @@ const InterviewSessionSchema = new mongoose.Schema(
 
     completedAt: Date,
 
-    interviewDuration: Number
+    interviewDuration: Number,
 
     answers: [
       {
         aiGenerated: Boolean,
-        
+
         questionNumber: Number,
 
         questionText: String,
@@ -46,7 +46,11 @@ const InterviewSessionSchema = new mongoose.Schema(
         evaluationStatus: {
           type: String,
           default: "pending"
-        }
+        },
+
+        isFollowUp: Boolean,
+
+        parentQuestion: String
       }
     ],
 

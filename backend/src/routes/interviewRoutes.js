@@ -58,26 +58,35 @@ router.post(
             req.params.sessionId
         });
 
-      const role =
-        session.candidate.role;
-
       const previousAnswers =
+
         session.answers
+
           .map(
 
             answer =>
 
-              `
-              Question:
-              ${answer.questionText}
+            `
+            Question:
+            ${answer.questionText}
 
-              Answer:
-              ${answer.transcript}
-              `
+            Candidate Answer:
+            ${answer.transcript}
+            `
           )
+
           .join("\n");
 
+      const followUpCount =
+
+        session.answers.filter(
+
+          answer =>
+            answer.isFollowUp
+        ).length;
+
       const completion =
+
         await azureClient.chat.completions.create({
 
           model:
@@ -87,107 +96,163 @@ router.post(
           messages: [
 
             {
+
               role: "system",
 
               content:
               `
-              You are an interviewer.
+              You are an adaptive AI interviewer.
 
-              Generate ONE moderately hard
-              interview question for:
+              Your job:
 
-              ${role}
-              
+              1. Analyze the latest answer
+              2. Decide whether:
+                 - follow-up needed
+                 - move to next topic
+
+              RULES:
+
+              Ask follow-up IF:
+              - answer vague
+              - lacks technical depth
+              - incomplete explanation
+              - weak justification
+              - short answer
+
+              Move ahead IF:
+              - technically strong
+              - detailed
+              - clear reasoning
+              - sufficient depth
+
+              Role:
+              ${session.candidate.role}
+
+              Difficulty:
+              Moderately Hard
+
+              Maximum follow-up count: 2
+
+              Follow-ups used so far: ${followUpCount}
+
+              If already reached maximum follow-ups,
+              you MUST move to a new topic.
+
               It needs to be a one line question that a candidate can read within 5 seconds.
-              Build upon previous answers.
 
-              Also generate ideal answer.
-
-              Return JSON:
+              Return STRICT JSON:
 
               {
+                "type": "followup" OR "new",
                 "question": "...",
-                "expectedAnswer": "..."
+                "expectedAnswer": "...",
+                "reason": "..."
               }
+
+              NO markdown.
+              NO codeblocks.
               `
             },
 
             {
+
               role: "user",
 
               content:
-                previousAnswers
+              `
+              Previous Interview:
+
+              ${previousAnswers}
+              `
             }
-          ]
+          ],
+
+          temperature: 0.7,
+
+          max_tokens: 500
         });
 
       const content =
-  completion.choices[0]
-    .message.content;
+        completion.choices[0]
+          .message.content;
 
-const responseText =
+      const responseText =
 
-  typeof content === "string"
+        typeof content === "string"
 
-    ? content
+          ? content
 
-    : content
-        ?.map(
-          item => item.text || ""
-        )
-        .join(" ")
+          : content
+              ?.map(
+                item => item.text || ""
+              )
+              .join(" ")
 
-    || "";
+          || "";
 
-console.log("RAW QUESTION:");
-console.log(responseText);
+      console.log("RAW QUESTION:");
+      console.log(responseText);
 
-const cleaned =
+      const cleaned =
 
-  responseText
+        responseText
 
-    .replace(/```json\s*/gi, "")
+          .replace(/```json\s*/gi, "")
 
-    .replace(/```\s*/g, "")
+          .replace(/```\s*/g, "")
 
-    .trim();
+          .trim();
 
-console.log("CLEANED:");
-console.log(cleaned);
+      console.log("CLEANED:");
+      console.log(cleaned);
 
-let parsed;
+      let parsed;
 
-try {
+      try {
 
-  parsed =
-    JSON.parse(cleaned);
+        parsed =
+          JSON.parse(cleaned);
 
-} catch (error) {
+      } catch (error) {
 
-  console.log(error);
+        console.log(error);
 
-  parsed = {
+        parsed = {
 
-    question:
-      "Explain a difficult technical challenge you solved.",
+          type: "new",
 
-    expectedAnswer:
-      "Structured technical explanation with problem-solving approach."
-  };
-}
+          question:
+            "Explain a difficult technical challenge you solved.",
 
-res.json(parsed);
+          expectedAnswer:
+            "Structured technical explanation with problem-solving approach.",
+
+          reason:
+            "Fallback question due to parse error."
+        };
+      }
+
+      console.log(
+        "FOLLOWUP DECISION:"
+      );
+
+      console.log(parsed);
+
+      res.json(parsed);
 
     } catch (error) {
 
       console.log(error);
 
       res.status(500).json({
+        type: "new",
         question:
           "Explain a challenging technical problem you solved.",
 
         expectedAnswer:
-          "Structured technical explanation."
+          "Structured technical explanation.",
+
+        reason: "Fallback due to server error."
       });
 
     }
@@ -349,6 +414,12 @@ router.post(
         expectedAnswer,
 
         timeTaken,
+
+        isFollowUp:
+          req.body.isFollowUp || false,
+
+        parentQuestion:
+          req.body.parentQuestion || null,
 
         score: null,
 

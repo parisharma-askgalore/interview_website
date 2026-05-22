@@ -127,7 +127,9 @@ const generateInterviewPDF = (
         doc
           .fontSize(16)
           .text(
-            `Question ${index + 1}`
+            answer.isFollowUp
+              ? `Follow-up Question`
+              : `Question ${index + 1}`
           );
 
         doc.moveDown(0.5);

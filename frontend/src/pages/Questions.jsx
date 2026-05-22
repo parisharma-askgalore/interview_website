@@ -412,6 +412,8 @@ function Questions() {
         transcript,
         expectedAnswer: currentQuestion.answer,
         timeTaken: questionTimeTaken,
+        isFollowUp: currentQuestion.isFollowUp || false,
+        parentQuestion: currentQuestion.parentQuestion || null,
       });
     } catch (error) {
       console.error("Error submitting answer:", error);
@@ -451,6 +453,10 @@ function Questions() {
           question: response.data.question,
           answer: response.data.expectedAnswer,
           aiGenerated: true,
+          isFollowUp:
+            response.data.type === "followup",
+          reason:
+            response.data.reason
         };
 
         setQuestions(prev => [...prev, aiQuestion]);
@@ -571,7 +577,13 @@ function Questions() {
         </div>
 
         {/* Question */}
-        <p className={styles.questionLabel}>Question {currentQuestionIndex + 1}</p>
+        <p className={styles.questionLabel}>
+          {
+            questions[currentQuestionIndex]?.isFollowUp
+              ? "Follow-up Question"
+              : `Question ${currentQuestionIndex + 1}`
+          }
+        </p>
         <h2 className={styles.questionText}>
           {questions[currentQuestionIndex]?.question || "Loading next question..."}
         </h2>
