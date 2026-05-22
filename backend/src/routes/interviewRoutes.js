@@ -312,6 +312,8 @@ router.post(
         transcript
       } = req.body;
 
+      const timeTaken = req.body.timeTaken;
+
       let expectedAnswer = "";
 
         if (
@@ -345,6 +347,8 @@ router.post(
         transcript,
 
         expectedAnswer,
+
+        timeTaken,
 
         score: null,
 
@@ -562,7 +566,7 @@ router.post(
         });
 
       const pdfPath =
-        `app/reports/${session.sessionId}.pdf`;
+        `src/reports/${session.sessionId}.pdf`;
 
       let pending = true;
 
@@ -608,6 +612,13 @@ while (pending) {
       req.params.sessionId
 
   });
+
+      finalSession.interviewDuration =
+        Math.floor(
+          (new Date() - new Date(finalSession.startedAt)) / 1000
+        );
+
+      await finalSession.save();
 
       console.log("Generating PDF for session:", req.params.sessionId);
       console.log("PDF Path:", pdfPath);

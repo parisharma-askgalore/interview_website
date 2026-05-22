@@ -16,6 +16,15 @@ const InterviewSessionSchema = new mongoose.Schema(
       default: "in_progress"
     },
 
+    startedAt: {
+      type: Date,
+      default: Date.now
+    },
+
+    completedAt: Date,
+
+    interviewDuration: Number
+
     answers: [
       {
         aiGenerated: Boolean,
@@ -29,6 +38,8 @@ const InterviewSessionSchema = new mongoose.Schema(
         expectedAnswer: String,
 
         score: Number,
+
+        timeTaken: Number,
 
         evaluation: String,
 

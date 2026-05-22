@@ -68,6 +68,12 @@ const generateInterviewPDF = (
       ${session.terminationReason || "None"}`
     );
 
+    doc.moveDown(0.5);
+
+    doc.text(
+      `Total Interview Duration: ${Math.floor(session.interviewDuration / 60)} min ${session.interviewDuration % 60} sec`
+    );
+
     doc.moveDown(2);
 
     // ANSWERS
@@ -138,6 +144,12 @@ const generateInterviewPDF = (
         doc.text(
           `Candidate Answer:
           ${answer.transcript}`
+        );
+
+        doc.moveDown(0.5);
+
+        doc.text(
+          `Time Taken: ${answer.timeTaken} seconds`
         );
 
         doc.moveDown(0.5);

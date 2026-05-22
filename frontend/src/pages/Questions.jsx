@@ -33,6 +33,9 @@ function Questions() {
   const [isGeneratingQuestion, setIsGeneratingQuestion] = useState(false);
   const [violationCount, setViolationCount] = useState(0);
   const [fullscreenWarning, setFullscreenWarning] = useState(false);
+  const [questionTimer, setQuestionTimer] = useState(0);
+
+  const [totalTimer, setTotalTimer] = useState(0);
 
   const TOTAL = 10;
 
@@ -43,6 +46,13 @@ function Questions() {
   const analyserRef = useRef(null);
   const audioContextRef = useRef(null);
   const timerIntervalRef = useRef(null);
+  const questionTimerRef = useRef(null);
+
+  const totalTimerRef = useRef(null);
+
+  const questionStartTimeRef = useRef(null);
+
+  const interviewStartTimeRef = useRef(Date.now());
   const recordingTimeoutRef = useRef(null);
 
   // FIX 3: Ref that mirrors isRecording state so closures (e.g. detectSilence)
@@ -126,6 +136,32 @@ function Questions() {
     return () => {
       document.removeEventListener("fullscreenchange", handleFullscreenChange);
     };
+  }, []);
+
+  useEffect(() => {
+
+    totalTimerRef.current =
+      setInterval(() => {
+
+        const seconds = Math.floor(
+
+          (Date.now() -
+            interviewStartTimeRef.current)
+
+          / 1000
+        );
+
+        setTotalTimer(seconds);
+
+      }, 1000);
+
+    return () => {
+
+      clearInterval(
+        totalTimerRef.current
+      );
+    };
+
   }, []);
 
   useEffect(() => {
@@ -247,6 +283,26 @@ function Questions() {
       isRecordingRef.current = true;
       setIsRecording(true);
 
+      questionStartTimeRef.current =
+      Date.now();
+
+    setQuestionTimer(0);
+
+    questionTimerRef.current =
+      setInterval(() => {
+
+        const seconds = Math.floor(
+
+          (Date.now() -
+            questionStartTimeRef.current)
+
+          / 1000
+        );
+
+        setQuestionTimer(seconds);
+
+      }, 1000);
+
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
 
@@ -317,6 +373,18 @@ function Questions() {
 
   const stopRecording = async () => {
     // FIX 3: Keep ref in sync when stopping.
+    clearInterval(
+      questionTimerRef.current
+    );
+
+    const questionTimeTaken =
+      Math.floor(
+
+        (Date.now() -
+          questionStartTimeRef.current)
+
+        / 1000
+      );
     isRecordingRef.current = false;
     setIsRecording(false);
 
@@ -343,6 +411,7 @@ function Questions() {
         questionText: currentQuestion.question,
         transcript,
         expectedAnswer: currentQuestion.answer,
+        timeTaken: questionTimeTaken,
       });
     } catch (error) {
       console.error("Error submitting answer:", error);
@@ -355,6 +424,7 @@ function Questions() {
   // audioChunksRef — the Azure Speech SDK transcript path is the active one.
 
   const moveNextQuestion = async () => {
+    setQuestionTimer(0);
     const nextIndex = currentQuestionIndex + 1;
 
     if (nextIndex >= TOTAL) {
@@ -505,6 +575,15 @@ function Questions() {
         <h2 className={styles.questionText}>
           {questions[currentQuestionIndex]?.question || "Loading next question..."}
         </h2>
+
+        <div className={styles.timerRow}>
+          <div className={styles.timerBox}>
+            Question Time: {questionTimer}s
+          </div>
+          <div className={styles.timerBox}>
+            Total Time: {Math.floor(totalTimer / 60)}m {totalTimer % 60}s
+          </div>
+        </div>
 
         {/* Status area */}
         <div className={styles.statusArea}>
