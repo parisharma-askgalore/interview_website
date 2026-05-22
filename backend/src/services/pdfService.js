@@ -1,5 +1,4 @@
 import PDFDocument from "pdfkit";
-
 import fs from "fs";
 
 const generateInterviewPDF = (
@@ -18,227 +17,282 @@ const generateInterviewPDF = (
 
     doc.pipe(stream);
 
-    // HEADER
+    // COLORS
+    const primaryColor  = "#2563eb";
+    const dangerColor   = "#dc2626";
+    const successColor  = "#16a34a";
+    const grayColor     = "#6b7280";
+
+    // ── STEP 5: HEADER ────────────────────────────────────────────
+    doc
+      .rect(0, 0, 700, 90)
+      .fill(primaryColor);
 
     doc
-      .fontSize(22)
-      .text(
-        "Interview Evaluation Report",
-        {
-          align: "center"
-        }
-      );
-
-    doc.moveDown(2);
-
-    // CANDIDATE INFO
-
-    doc
-      .fontSize(16)
-      .text("Candidate Information");
-
-    doc.moveDown(0.5);
+      .fillColor("white")
+      .fontSize(28)
+      .font("Helvetica-Bold")
+      .text("Interview Evaluation Report", 50, 30);
 
     doc
       .fontSize(12)
-      .text(
-        `Name: ${session.candidate.name}`
-      );
+      .font("Helvetica")
+      .text(`Generated: ${new Date().toLocaleString()}`, 50, 65);
 
-    doc.text(
-      `Email: ${session.candidate.email}`
-    );
+    doc.moveDown(4);
+    doc.fillColor("black");
 
-    doc.text(
-      `Role:
-      ${session.candidate.role}`
-    );
-
-    doc.moveDown(0.5);
-
-    doc.text(
-      `Violations:
-      ${session.violations.length}`
-    );
-
-    doc.moveDown(0.5);
-
-    doc.text(
-      `Termination:
-      ${session.terminationReason || "None"}`
-    );
-
-    doc.moveDown(0.5);
-
-    doc.text(
-      `Total Interview Duration: ${Math.floor(session.interviewDuration / 60)} min ${session.interviewDuration % 60} sec`
-    );
-
-    doc.moveDown(2);
-
-    // ANSWERS
-
+    // ── STEP 6: CANDIDATE SUMMARY CARD ───────────────────────────
     doc
-      .fontSize(16)
-      .text("Violation Log");
-
-    doc.moveDown(1);
-
-    if (
-      session.violations.length === 0
-    ) {
-
-      doc
-        .fontSize(12)
-        .text("No violations detected");
-
-    } else {
-
-      session.violations.forEach(
-
-        (violation, index) => {
-
-          doc
-            .fontSize(12)
-            .text(
-
-              `
-              ${index + 1}.
-              ${violation.type}
-
-              Time:
-              ${new Date(
-                violation.timestamp
-              ).toLocaleString()}
-              `
-            );
-
-          doc.moveDown(0.5);
-
-        }
-      );
-    }
-
-    doc.moveDown(2);
-
-    session.answers.forEach(
-      (answer, index) => {
-
-        doc
-          .fontSize(16)
-          .text(
-            answer.isFollowUp
-              ? `Follow-up Question`
-              : `Question ${index + 1}`
-          );
-
-        doc.moveDown(0.5);
-
-        doc
-          .fontSize(12)
-          .text(
-            `Question:
-            ${answer.questionText}`
-          );
-
-        doc.moveDown(0.5);
-
-        doc.text(
-          `Candidate Answer:
-          ${answer.transcript}`
-        );
-
-        doc.moveDown(0.5);
-
-        doc.text(
-          `Time Taken: ${answer.timeTaken} seconds`
-        );
-
-        doc.moveDown(0.5);
-
-        doc.text(
-          `Expected Answer:
-          ${answer.expectedAnswer}`
-        );
-
-        doc.moveDown(0.5);
-
-        doc.text(
-          `Technical: ${answer.score?.technical ?? 0}/10\nCommunication: ${answer.score?.communication ?? 0}/10\nConfidence: ${answer.score?.confidence ?? 0}/10\nProblem Solving: ${answer.score?.problemSolving ?? 0}/10\nOverall: ${answer.score?.overall ?? 0}/10`
-        );
-
-        doc.moveDown(0.5);
-
-        doc.text(
-          `Evaluation:
-          ${answer.evaluation}`
-        );
-
-        doc.moveDown(2);
-
-      }
-    );
-
-    const allScores =
-
-      session.answers.map(
-
-        answer =>
-          answer.score?.overall || 0
-      );
-
-    const average =
-
-      allScores.length
-
-        ? (
-            allScores.reduce(
-              (a, b) => a + b,
-              0
-            ) / allScores.length
-          ).toFixed(1)
-
-        : 0;
-
-    let recommendation = "Reject";
-
-    if (average >= 8) {
-
-      recommendation = "Strong Hire";
-
-    } else if (average >= 6) {
-
-      recommendation = "Consider";
-    }
-
-    doc.moveDown(2);
+      .roundedRect(50, 120, 500, 130, 10)
+      .stroke(primaryColor);
 
     doc
       .fontSize(18)
+      .font("Helvetica-Bold")
+      .fillColor(primaryColor)
+      .text("Candidate Summary", 70, 135);
+
+    doc
+      .fillColor("black")
+      .fontSize(12)
+      .font("Helvetica");
+
+    doc.text(`Name: ${session.candidate.name}`, 70, 170);
+    doc.text(`Email: ${session.candidate.email}`);
+    doc.text(`Role: ${session.candidate.role}`);
+    doc.text(`Violations: ${session.violations.length}`);
+    doc.text(
+      `Interview Duration: ${Math.floor(session.interviewDuration / 60)} min ${session.interviewDuration % 60} sec`
+    );
+
+    doc.moveDown(6);
+
+    // ── STEP 7: ANALYTICS SECTION ─────────────────────────────────
+    doc
+      .fontSize(18)
+      .font("Helvetica-Bold")
+      .fillColor(primaryColor)
       .text("Final Assessment");
 
     doc.moveDown(1);
 
     doc
-      .fontSize(14)
-      .text(
-        `Average Overall Score: ${average}/10`
-      );
+      .fontSize(13)
+      .fillColor("black")
+      .font("Helvetica-Bold")
+      .text(`Average Score: ${session.analytics?.averageScore?.toFixed(1) ?? "0.0"}/10`);
+
+    doc.moveDown(0.5);
+
+    doc
+      .fillColor(
+        session.analytics?.recommendation === "Strong Hire"
+          ? successColor
+          : dangerColor
+      )
+      .fontSize(16)
+      .text(`Recommendation: ${session.analytics?.recommendation ?? "N/A"}`);
 
     doc.moveDown(1);
 
-    doc.text(
-      `Recommendation: ${recommendation}`
-    );
+    // ── STEP 8: STRENGTHS / WEAKNESSES ───────────────────────────
+    doc
+      .fillColor(primaryColor)
+      .fontSize(16)
+      .font("Helvetica-Bold")
+      .text("Strengths");
+
+    doc.moveDown(0.5);
+
+    (session.analytics?.strengths || []).forEach(item => {
+      doc
+        .fillColor("black")
+        .fontSize(12)
+        .font("Helvetica")
+        .text(`• ${item}`);
+    });
+
+    doc.moveDown(1);
+
+    doc
+      .fillColor(dangerColor)
+      .fontSize(16)
+      .font("Helvetica-Bold")
+      .text("Weaknesses");
+
+    doc.moveDown(0.5);
+
+    (session.analytics?.weaknesses || []).forEach(item => {
+      doc
+        .fillColor("black")
+        .fontSize(12)
+        .font("Helvetica")
+        .text(`• ${item}`);
+    });
+
+    doc.moveDown(2);
+
+    // ── VIOLATION LOG ─────────────────────────────────────────────
+    doc
+      .fontSize(16)
+      .font("Helvetica-Bold")
+      .fillColor(primaryColor)
+      .text("Violation Log");
+
+    doc.moveDown(1);
+
+    if (session.violations.length === 0) {
+
+      doc
+        .fontSize(12)
+        .font("Helvetica")
+        .fillColor("black")
+        .text("No violations detected");
+
+    } else {
+
+      session.violations.forEach((violation, index) => {
+        doc
+          .fontSize(12)
+          .font("Helvetica")
+          .fillColor("black")
+          .text(
+            `${index + 1}. ${violation.type} — ${new Date(violation.timestamp).toLocaleString()}`
+          );
+
+        doc.moveDown(0.5);
+      });
+    }
+
+    doc.moveDown(2);
+
+    // ── STEP 9–12: ANSWERS ────────────────────────────────────────
+    session.answers.forEach((answer, index) => {
+
+      // Divider line
+      doc
+        .moveDown(1)
+        .lineWidth(2)
+        .strokeColor(primaryColor)
+        .moveTo(50, doc.y)
+        .lineTo(550, doc.y)
+        .stroke();
+
+      doc.moveDown(1);
+
+      // Question heading
+      doc
+        .fillColor(primaryColor)
+        .fontSize(18)
+        .font("Helvetica-Bold")
+        .text(
+          answer.isFollowUp
+            ? "Follow-up Question"
+            : `Question ${index + 1}`
+        );
+
+      doc.moveDown(0.7);
+
+      // QUESTION
+      doc
+        .fillColor(grayColor)
+        .fontSize(11)
+        .font("Helvetica-Bold")
+        .text("QUESTION");
+
+      doc
+        .fillColor("black")
+        .fontSize(13)
+        .font("Helvetica")
+        .text(answer.questionText);
+
+      doc.moveDown(0.7);
+
+      // CANDIDATE ANSWER
+      doc
+        .fillColor(grayColor)
+        .fontSize(11)
+        .font("Helvetica-Bold")
+        .text("CANDIDATE ANSWER");
+
+      doc
+        .fillColor("black")
+        .fontSize(12)
+        .font("Helvetica")
+        .text(answer.transcript);
+
+      doc.moveDown(0.7);
+
+      // EXPECTED ANSWER
+      doc
+        .fillColor(grayColor)
+        .fontSize(11)
+        .font("Helvetica-Bold")
+        .text("EXPECTED ANSWER");
+
+      doc
+        .fillColor("black")
+        .fontSize(12)
+        .font("Helvetica")
+        .text(answer.expectedAnswer);
+
+      doc.moveDown(1);
+
+      // STEP 10: SCORECARD BOX
+      const boxTop = doc.y;
+
+      doc
+        .roundedRect(60, boxTop, 460, 110, 8)
+        .fillAndStroke("#eff6ff", primaryColor);
+
+      doc
+        .fillColor(primaryColor)
+        .fontSize(14)
+        .font("Helvetica-Bold")
+        .text("Score Breakdown", 80, boxTop + 10);
+
+      doc
+        .fillColor("black")
+        .fontSize(12)
+        .font("Helvetica");
+
+      doc.text(`Technical:      ${answer.score?.technical      ?? 0}/10`, 80, boxTop + 32);
+      doc.text(`Communication:  ${answer.score?.communication  ?? 0}/10`, 80, boxTop + 48);
+      doc.text(`Confidence:     ${answer.score?.confidence     ?? 0}/10`, 80, boxTop + 64);
+      doc.text(`Problem Solving:${answer.score?.problemSolving ?? 0}/10`, 80, boxTop + 80);
+      doc.text(`Overall:        ${answer.score?.overall        ?? 0}/10`, 80, boxTop + 96);
+
+      doc.moveDown(8);
+
+      // STEP 11: EVALUATION
+      doc
+        .fillColor(grayColor)
+        .fontSize(11)
+        .font("Helvetica-Bold")
+        .text("EVALUATION");
+
+      doc
+        .fillColor("black")
+        .fontSize(12)
+        .font("Helvetica")
+        .text(answer.evaluation);
+
+      doc.moveDown(1);
+
+      // STEP 12: TIME TAKEN
+      doc
+        .fillColor(primaryColor)
+        .fontSize(12)
+        .font("Helvetica-Bold")
+        .text(`Time Taken: ${answer.timeTaken} sec`);
+
+      doc.moveDown(2);
+    });
 
     doc.end();
 
-    stream.on(
-      "finish",
-
-      () => resolve()
-    );
-
+    stream.on("finish", () => resolve());
   });
 };
 

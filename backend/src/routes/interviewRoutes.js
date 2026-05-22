@@ -738,6 +738,36 @@ while (pending) {
           (new Date() - new Date(finalSession.startedAt)) / 1000
         );
 
+      const overallScores =
+        finalSession.answers.map(
+          answer => answer.score?.overall || 0
+        );
+
+      const averageScore =
+        overallScores.length
+          ? overallScores.reduce((a, b) => a + b, 0) / overallScores.length
+          : 0;
+
+      let recommendation = "Reject";
+
+      if (averageScore >= 8) {
+        recommendation = "Strong Hire";
+      } else if (averageScore >= 6) {
+        recommendation = "Consider";
+      }
+
+      finalSession.analytics = {
+        averageScore,
+        recommendation,
+        strengths: [
+          "Technical Understanding",
+          "Problem Solving"
+        ],
+        weaknesses: [
+          "Communication Clarity"
+        ]
+      };
+
       await finalSession.save();
 
       console.log("Generating PDF for session:", req.params.sessionId);

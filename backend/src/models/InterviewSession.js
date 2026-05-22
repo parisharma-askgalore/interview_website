@@ -74,8 +74,15 @@ const InterviewSessionSchema = new mongoose.Schema(
 
     terminationReason: String,
 
-    role: String
-      },
+    role: String,
+
+    analytics: {
+      strengths: [String],
+      weaknesses: [String],
+      recommendation: String,
+      averageScore: Number
+    }
+  },
   {
     timestamps: true
   },
