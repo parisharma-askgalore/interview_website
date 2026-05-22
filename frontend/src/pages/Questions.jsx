@@ -36,6 +36,7 @@ function Questions() {
   const [questionTimer, setQuestionTimer] = useState(0);
 
   const [totalTimer, setTotalTimer] = useState(0);
+  const [liveTranscript, setLiveTranscript] = useState("");
 
   const TOTAL = 10;
 
@@ -250,6 +251,7 @@ function Questions() {
   };
 
   const startRecording = async () => {
+    setLiveTranscript("");
     try {
       const speechConfig = sdk.SpeechConfig.fromSubscription(
         import.meta.env.VITE_AZURE_SPEECH_KEY,
@@ -265,12 +267,13 @@ function Questions() {
       let finalTranscript = "";
 
       recognizer.recognizing = (s, e) => {
-        console.log("Partial:", e.result.text);
+        setLiveTranscript(e.result.text);
       };
 
       recognizer.recognized = (s, e) => {
         if (e.result.reason === sdk.ResultReason.RecognizedSpeech) {
           finalTranscript += " " + e.result.text;
+          setLiveTranscript(finalTranscript);
         }
       };
 
@@ -601,6 +604,39 @@ function Questions() {
         <div className={styles.statusArea}>
           {renderStatus()}
         </div>
+
+        {/* Live Transcript */}
+        {(isRecording || liveTranscript) && (
+          <div style={{
+            width: "100%",
+            marginTop: "24px",
+            padding: "18px",
+            borderRadius: "14px",
+            background: "rgba(255, 255, 255, 0.04)",
+            border: "1px solid rgba(255, 255, 255, 0.08)",
+            textAlign: "left",
+            boxSizing: "border-box",
+          }}>
+            <div style={{
+              fontSize: "12px",
+              fontWeight: "700",
+              letterSpacing: "1px",
+              textTransform: "uppercase",
+              opacity: 0.7,
+              marginBottom: "10px",
+            }}>
+              Live Transcript
+            </div>
+            <div style={{
+              fontSize: "15px",
+              lineHeight: "1.7",
+              color: "#ffffff",
+              minHeight: "48px",
+            }}>
+              {liveTranscript || "Listening..."}
+            </div>
+          </div>
+        )}
 
         {/* Stop & Next button — only shown while recording */}
         {isRecording && (
