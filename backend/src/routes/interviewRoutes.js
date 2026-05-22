@@ -453,20 +453,39 @@ router.post(
 
             content:
             `
-              You are an AI interview evaluator.
+You are an expert AI technical interviewer.
 
-              Evaluate the candidate answer
-              against the expected answer.
+Evaluate the candidate answer.
 
-              IMPORTANT:
-              Return ONLY valid JSON.
+You MUST score across:
 
-              Format:
+1. Technical Knowledge
+2. Communication
+3. Confidence
+4. Problem Solving
+5. Overall
 
-              {
-                "score": 8,
-                "feedback": "Strong answer..."
-              }
+Scoring Rules:
+
+0-3: Poor
+4-6: Average
+7-8: Good
+9-10: Excellent
+
+Return STRICT JSON ONLY:
+
+{
+  "technical": number,
+  "communication": number,
+  "confidence": number,
+  "problemSolving": number,
+  "overall": number,
+  "evaluation": "detailed evaluation"
+}
+
+NO markdown.
+NO code blocks.
+NO extra text.
             `
           },
 
@@ -475,6 +494,12 @@ router.post(
 
             content:
             `
+            Role:
+            ${session.candidate.role}
+
+            Difficulty:
+            Moderately Hard
+
             Question:
             ${questionText}
 
@@ -490,92 +515,116 @@ router.post(
 
         temperature: 0.3,
 
-        max_tokens: 120
+        max_tokens: 300
 
       });
 
-    const content =
-  completion.choices[0]
-    .message.content;
+    const responseText =
+      completion.choices[0]
+        .message.content;
 
-const responseText =
-  typeof content === "string"
+    console.log(
+      "RAW AI RESPONSE:"
+    );
 
-    ? content
+    console.log(responseText);
 
-    : content
-        ?.map(item => item.text || "")
-        .join(" ") || "";
+    const cleaned =
 
-console.log("RAW AI RESPONSE:");
-console.log(responseText);
+      responseText
 
-const cleaned =
-  responseText
-    .replace(/```json\s*/g, "")
-    .replace(/```\s*/g, "")
-    .trim();
-console.log("CLEANED:");
-console.log(cleaned);
-const parsed =
-  JSON.parse(cleaned);
+        .replace(/```json\s*/gi, "")
 
-const score =
-  Number(parsed.score);
+        .replace(/```\s*/g, "")
 
-const evaluation =
-  parsed.feedback;
+        .trim();
 
-console.log("UPDATING ANSWER");
+    console.log("CLEANED:");
 
-console.log({
-  sessionId: req.params.sessionId,
-  questionNumber: Number(questionIndex) + 1,
-  score,
-  evaluation
-});
+    console.log(cleaned);
 
-const freshSession =
-  await InterviewSession.findOne({
+    let parsed;
 
-    sessionId:
-      req.params.sessionId
-  });
+    try {
 
-const answerIndex =
-  freshSession.answers.findIndex(
+      parsed =
+        JSON.parse(cleaned);
 
-    answer =>
+    } catch (error) {
 
-      answer.questionNumber ===
-      Number(questionIndex) + 1
-  );
+      console.log(error);
 
-console.log("ANSWER INDEX:");
-console.log(answerIndex);
+      parsed = {
 
-await InterviewSession.updateOne(
+        technical: 0,
 
-  {
-    sessionId:
-      req.params.sessionId
-  },
+        communication: 0,
 
-  {
+        confidence: 0,
 
-    $set: {
+        problemSolving: 0,
 
-      [`answers.${answerIndex}.score`]:
-        score,
+        overall: 0,
 
-      [`answers.${answerIndex}.evaluation`]:
-        evaluation,
-
-      [`answers.${answerIndex}.evaluationStatus`]:
-        "completed"
+        evaluation:
+          "Evaluation failed."
+      };
     }
-  }
-);
+
+    console.log("UPDATING ANSWER");
+
+    console.log({
+      sessionId: req.params.sessionId,
+      questionNumber: Number(questionIndex) + 1,
+      parsed
+    });
+
+    const freshSession =
+      await InterviewSession.findOne({
+
+        sessionId:
+          req.params.sessionId
+      });
+
+    const answerIndex =
+      freshSession.answers.findIndex(
+
+        answer =>
+
+          answer.questionNumber ===
+          Number(questionIndex) + 1
+      );
+
+    console.log("ANSWER INDEX:");
+    console.log(answerIndex);
+
+    await InterviewSession.updateOne(
+
+      {
+        sessionId:
+          req.params.sessionId
+      },
+
+      {
+
+        $set: {
+
+          [`answers.${answerIndex}.score`]: {
+            technical: parsed.technical,
+            communication: parsed.communication,
+            confidence: parsed.confidence,
+            problemSolving: parsed.problemSolving,
+            overall: parsed.overall
+          },
+
+          [`answers.${answerIndex}.evaluation`]:
+            parsed.evaluation,
+
+          [`answers.${answerIndex}.evaluationStatus`]:
+            "completed"
+        }
+      }
+    );
 
   } catch (err) {
 

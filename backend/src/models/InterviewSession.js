@@ -37,7 +37,13 @@ const InterviewSessionSchema = new mongoose.Schema(
 
         expectedAnswer: String,
 
-        score: Number,
+        score: {
+          technical: Number,
+          communication: Number,
+          confidence: Number,
+          problemSolving: Number,
+          overall: Number
+        },
 
         timeTaken: Number,
 

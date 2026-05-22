@@ -164,8 +164,7 @@ const generateInterviewPDF = (
         doc.moveDown(0.5);
 
         doc.text(
-          `Score:
-          ${answer.score}`
+          `Technical: ${answer.score?.technical ?? 0}/10\nCommunication: ${answer.score?.communication ?? 0}/10\nConfidence: ${answer.score?.confidence ?? 0}/10\nProblem Solving: ${answer.score?.problemSolving ?? 0}/10\nOverall: ${answer.score?.overall ?? 0}/10`
         );
 
         doc.moveDown(0.5);
@@ -178,6 +177,58 @@ const generateInterviewPDF = (
         doc.moveDown(2);
 
       }
+    );
+
+    const allScores =
+
+      session.answers.map(
+
+        answer =>
+          answer.score?.overall || 0
+      );
+
+    const average =
+
+      allScores.length
+
+        ? (
+            allScores.reduce(
+              (a, b) => a + b,
+              0
+            ) / allScores.length
+          ).toFixed(1)
+
+        : 0;
+
+    let recommendation = "Reject";
+
+    if (average >= 8) {
+
+      recommendation = "Strong Hire";
+
+    } else if (average >= 6) {
+
+      recommendation = "Consider";
+    }
+
+    doc.moveDown(2);
+
+    doc
+      .fontSize(18)
+      .text("Final Assessment");
+
+    doc.moveDown(1);
+
+    doc
+      .fontSize(14)
+      .text(
+        `Average Overall Score: ${average}/10`
+      );
+
+    doc.moveDown(1);
+
+    doc.text(
+      `Recommendation: ${recommendation}`
     );
 
     doc.end();
