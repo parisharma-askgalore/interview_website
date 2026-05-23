@@ -5,7 +5,6 @@ const videos = {
   speak: [
     "/avatar/speak-1.mp4",
     "/avatar/speak-2.mp4",
-    "/avatar/speak-3.mp4",
   ],
 };
 
@@ -13,35 +12,39 @@ export default function AvatarPlayer({ speaking }) {
   const videoRef = useRef(null);
   const [src, setSrc] = useState(videos.idle);
 
+  // FIX: single useEffect (removed the duplicate that was overwriting this one)
   useEffect(() => {
     if (speaking) {
       const randomVideo =
         videos.speak[Math.floor(Math.random() * videos.speak.length)];
-
       setSrc(randomVideo);
     } else {
       setSrc(videos.idle);
     }
   }, [speaking]);
 
+  // FIX: when src changes, explicitly call load() + play() so the video actually reloads
   useEffect(() => {
-  if (speaking) {
-    setSrc("/avatar/speak.mp4");
-  } else {
-    setSrc("/avatar/idle.mp4");
-  }
-}, [speaking]);
+    if (videoRef.current) {
+      videoRef.current.load();
+      videoRef.current.play().catch(() => {
+        // autoplay may be blocked — silently ignore
+      });
+    }
+  }, [src]);
 
   return (
-    <div className="w-1/2 rounded-2xl overflow-hidden bg-black">
+    // FIX: removed w-1/2 so avatar fills its panel fully
+    <div style={{ width: "100%", height: "100%" }}>
       <video
         ref={videoRef}
         src={src}
         autoPlay
         muted
         loop
+        preload="auto"
         playsInline
-        className="w-full h-full object-cover"
+        style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
       />
     </div>
   );

@@ -14,7 +14,27 @@ export default function Instructions() {
 
     const startInterview = () => {
 
-      navigate("/questions");
+        // Unlock browser audio autoplay by resuming AudioContext in response to this user gesture.
+        try {
+          const AudioCtx = window.AudioContext || window.webkitAudioContext;
+          if (AudioCtx) {
+            const ctx = new AudioCtx();
+            // create a silent oscillator briefly to unlock playback without audible sound
+            const gain = ctx.createGain();
+            gain.gain.value = 0;
+            gain.connect(ctx.destination);
+            const osc = ctx.createOscillator();
+            osc.connect(gain);
+            osc.start();
+            osc.stop();
+            // resume if suspended
+            if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+          }
+        } catch (e) {
+          // ignore: best-effort unlock
+        }
+
+        navigate("/questions");
 
     };
 
@@ -33,6 +53,20 @@ export default function Instructions() {
                 the interview assessment.
               </p>
             </header>
+
+            {/* Urgent anti-cheating banner */}
+            <div className={styles.urgentBanner}>
+              <div className={styles.urgentTitle}>Important — Do Not Switch Tabs or Exit Fullscreen</div>
+              <div className={styles.urgentText}>
+                <span className={styles.urgentStrong}>Tab switching</span> will terminate the interview immediately on first occurrence.
+                <br />
+                <span className={styles.urgentStrong}>Exiting fullscreen</span> is monitored — two exits will terminate the interview.
+                <br />
+                Keep your head in the camera frame at all times. Your eye movements and face position are being tracked — look at the screen always.
+                <br />
+                You're being analysed on video for integrity checks; avoid cheating. If violations are detected your interview may be terminated and your application or offer may be withdrawn.
+              </div>
+            </div>
     
             {/* ── Interview Overview ── */}
             <section className={styles.section}>

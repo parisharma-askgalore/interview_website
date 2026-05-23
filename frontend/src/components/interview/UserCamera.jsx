@@ -5,13 +5,16 @@ export default function UserCamera() {
 
   useEffect(() => {
     const startCamera = async () => {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: true,
-      });
-
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: true,
+        });
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+      } catch (e) {
+        console.error("Camera access error:", e);
       }
     };
 
@@ -19,13 +22,14 @@ export default function UserCamera() {
   }, []);
 
   return (
-    <div className="w-1/2 rounded-2xl overflow-hidden bg-black">
+    // FIX: removed w-1/2 and rounded-2xl — the parent .video-panel handles sizing & border-radius
+    <div style={{ width: "100%", height: "100%" }}>
       <video
         ref={videoRef}
         autoPlay
         muted
         playsInline
-        className="w-full h-full object-cover"
+        style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
       />
     </div>
   );
