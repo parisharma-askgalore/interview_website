@@ -86,6 +86,9 @@ function Questions() {
         if (now - lastViolationRef.last < 1200) return;
         lastViolationRef.last = now;
 
+        // Stop AI speech immediately — user left fullscreen
+        stopSpeakingImmediately();
+
         try {
           // increment local defensive counter first
           fullscreenExitCountRef.current = (fullscreenExitCountRef.current || 0) + 1;
@@ -151,6 +154,9 @@ function Questions() {
   useEffect(() => {
     const handleVisibility = async () => {
       if (document.hidden) {
+        // Stop AI speech immediately — tab is hidden
+        stopSpeakingImmediately();
+
         // Immediately register tab switch violation and terminate
         try {
           const response = await API.post(`/interview/${sessionId}/violation`, { type: "tab_switch" });
@@ -184,14 +190,30 @@ function Questions() {
     } catch (e) { console.log(e); }
   };
 
+  // Ref to track whether we intentionally cancelled speech (e.g. violation) vs natural end
+  const speechCancelledRef = useRef(false);
+
+  /** Immediately silence TTS without triggering the normal "onend → startRecording" flow. */
+  const stopSpeakingImmediately = () => {
+    if (window.speechSynthesis && window.speechSynthesis.speaking) {
+      speechCancelledRef.current = true; // flag so onend knows not to start recording
+      window.speechSynthesis.cancel();
+    }
+    setSpeaking(false);
+  };
+
   const playAIQuestion = async (text) => {
     try {
       if (window.speechSynthesis) {
+        speechCancelledRef.current = false; // reset flag for new utterance
         const utter = new SpeechSynthesisUtterance(text);
         setSpeaking(true);
         utter.onend = () => {
-          setSpeaking(false);
-          startRecording();
+          // Only start recording if the speech ended naturally (not cancelled by violation)
+          if (!speechCancelledRef.current) {
+            setSpeaking(false);
+            startRecording();
+          }
         };
         window.speechSynthesis.cancel();
         window.speechSynthesis.speak(utter);
@@ -206,8 +228,10 @@ function Questions() {
   };
 
   useEffect(() => {
-    if (currentQuestion) playAIQuestion(currentQuestion.question);
-  }, [currentQuestion]);
+    // Don't speak if the "Enter Fullscreen" overlay is still visible —
+    // the user hasn't entered fullscreen yet so the interview shouldn't start.
+    if (currentQuestion && !showEnterFullscreen) playAIQuestion(currentQuestion.question);
+  }, [currentQuestion, showEnterFullscreen]);
 
   const startRecording = async () => {
     setLiveTranscript("");
@@ -515,7 +539,7 @@ function Questions() {
           <div className={styles.enterCard}>
             <h2 className={styles.enterTitle}>Enter Fullscreen</h2>
             <p className={styles.enterText}>Please click the button below to enter fullscreen for the best interview experience.</p>
-            <button className={styles.startBtn} onClick={handleEnterFullscreenClick}>Enter Fullscreen</button>
+            <button className={styles.stopBtn} onClick={handleEnterFullscreenClick}>Enter Fullscreen</button>
           </div>
         </div>
       )}

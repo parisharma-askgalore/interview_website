@@ -13,6 +13,7 @@ import {
 
 import generateInterviewPDF
 from "../services/pdfService.js";
+import fs from "fs";
 
 import transporter
 from "../services/mailService.js";
@@ -270,75 +271,151 @@ router.post(
         type
       } = req.body;
 
-      const session =
-        await InterviewSession.findOne({
+      // Atomic $push — avoids schema strict-mode conflicts with session.save().
+      // matchedCount tells us if the session exists without a separate fetch.
+      const pushResult = await InterviewSession.updateOne(
+        { sessionId: req.params.sessionId },
+        { $push: { violations: { type, timestamp: new Date() } } }
+      );
 
-          sessionId:
-            req.params.sessionId
-        });
-      
-      if (!session) {
-        return res.status(404).json({
-          message: "Session not found"
-        });
+      if (pushResult.matchedCount === 0) {
+        return res.status(404).json({ message: "Session not found" });
       }
 
-      // Ensure violations array exists
-      if (!session.violations) {
-        session.violations = [];
+      // Re-fetch so violation counts are accurate
+      const refreshed = await InterviewSession.findOne({ sessionId: req.params.sessionId });
+
+      const fullscreenCount = (refreshed.violations || []).filter(v => v.type === 'fullscreen_exit').length;
+      const tabSwitchCount  = (refreshed.violations || []).filter(v => v.type === 'tab_switch').length;
+
+      // Termination rules:
+      // - any tab_switch immediately terminates the interview
+      // - two fullscreen_exit violations terminate the interview
+      let terminated = refreshed.interviewTerminated || false;
+      let terminationReason = refreshed.terminationReason || '';
+
+      if (type === 'tab_switch') {
+        terminated = true;
+        terminationReason = 'Tab switch detected';
+      } else if (type === 'fullscreen_exit' && fullscreenCount >= 2) {
+        terminated = true;
+        terminationReason = 'Repeated fullscreen exits';
       }
 
-        // push this violation
-        session.violations.push({ type, timestamp: new Date() });
+      if (terminated) {
+        await InterviewSession.updateOne(
+          { sessionId: req.params.sessionId },
+          { $set: { interviewTerminated: true, status: 'terminated', terminationReason } }
+        );
+      }
 
-        // compute per-type counts
-        const fullscreenCount = session.violations.filter(v => v.type === 'fullscreen_exit').length;
-        const tabSwitchCount = session.violations.filter(v => v.type === 'tab_switch').length;
+      // Re-fetch final state (needed for PDF generation below)
+      const terminatedSession = await InterviewSession.findOne({ sessionId: req.params.sessionId });
 
-        // Termination rules:
-        // - any tab_switch immediately terminates the interview
-        // - two fullscreen_exit violations terminate the interview
-        let terminated = session.interviewTerminated || false;
+      console.log(`[VIOLATION] session=${req.params.sessionId} type=${type} fullscreenCount=${fullscreenCount} tabSwitchCount=${tabSwitchCount} terminated=${terminated}`);
 
-        if (type === 'tab_switch') {
-          terminated = true;
-          session.terminationReason = 'Tab switch detected';
-        } else if (type === 'fullscreen_exit' && fullscreenCount >= 2) {
-          terminated = true;
-          session.terminationReason = 'Repeated fullscreen exits';
-        }
-
-        if (terminated) {
-          session.interviewTerminated = true;
-          session.status = 'terminated';
-        }
-
-        await session.save();
-
-        console.log(`[VIOLATION] session=${req.params.sessionId} type=${type} fullscreenCount=${fullscreenCount} tabSwitchCount=${tabSwitchCount} terminated=${session.interviewTerminated}`);
-
-        // If the session was terminated by this violation, send a notification email to HR asynchronously.
+        // If the session was terminated by this violation, generate PDF report and send email to HR asynchronously.
         if (terminated) {
           (async () => {
             try {
-              const subject = `Interview Terminated - ${session.sessionId}`;
-              const text = `Interview session ${session.sessionId} for candidate ${session.candidate?.name || 'UNKNOWN'} (${session.candidate?.email || 'no-email'}) was terminated.\n\nReason: ${session.terminationReason || 'violation'}\nFullscreen exits: ${fullscreenCount}\nTab switches: ${tabSwitchCount}\nTimestamp: ${new Date().toISOString()}`;
+              // ── Compute analytics so the PDF has scores ──────────────
+              const overallScores = terminatedSession.answers.map(a => a.score?.overall || 0);
+              const averageScore = overallScores.length
+                ? overallScores.reduce((a, b) => a + b, 0) / overallScores.length
+                : 0;
+
+              let recommendation = "Reject";
+              if (averageScore >= 8) recommendation = "Strong Hire";
+              else if (averageScore >= 6) recommendation = "Consider";
+
+              const interviewDuration = Math.floor(
+                (new Date() - new Date(terminatedSession.startedAt || terminatedSession.createdAt || Date.now())) / 1000
+              );
+
+              const analytics = {
+                averageScore,
+                recommendation,
+                strengths: ["Technical Understanding", "Problem Solving"],
+                weaknesses: ["Communication Clarity"],
+              };
+
+              // Update analytics + duration atomically
+              await InterviewSession.updateOne(
+                { sessionId: req.params.sessionId },
+                { $set: { analytics, interviewDuration } }
+              );
+
+              // Re-fetch with analytics for PDF generation
+              const pdfSession = await InterviewSession.findOne({ sessionId: req.params.sessionId });
+
+              // ── Generate PDF ─────────────────────────────────────────
+              // Ensure reports directory exists
+              fs.mkdirSync('src/reports', { recursive: true });
+
+              const pdfPath = `src/reports/${pdfSession.sessionId}.pdf`;
+
+              console.log(`[VIOLATION TERMINATION] Generating PDF for session=${pdfSession.sessionId}`);
+              await generateInterviewPDF(pdfSession, pdfPath);
+              console.log(`[VIOLATION TERMINATION] PDF generated at ${pdfPath}`);
+
+              // ── Send email with PDF attached ──────────────────────────
+              const subject = `Interview Terminated (Violation) - ${pdfSession.candidate?.name || pdfSession.sessionId}`;
+              const text = [
+                `Interview session ${pdfSession.sessionId} was force-terminated due to a proctoring violation.`,
+                ``,
+                `Candidate : ${pdfSession.candidate?.name || 'UNKNOWN'}`,
+                `Email     : ${pdfSession.candidate?.email || 'N/A'}`,
+                `Role      : ${pdfSession.candidate?.role  || 'N/A'}`,
+                ``,
+                `Reason          : ${pdfSession.terminationReason || 'violation'}`,
+                `Fullscreen exits: ${fullscreenCount}`,
+                `Tab switches    : ${tabSwitchCount}`,
+                `Timestamp       : ${new Date().toISOString()}`,
+                ``,
+                `The full interview report (answers completed before termination) is attached.`,
+              ].join('\n');
+
               const mailOptions = {
                 from: process.env.HR_EMAIL,
                 to: process.env.HR_EMAIL,
                 subject,
                 text,
+                attachments: [
+                  {
+                    filename: `interview-report-${pdfSession.sessionId}.pdf`,
+                    path: pdfPath,
+                  },
+                ],
               };
-              console.log('Attempting to send termination email', { session: session.sessionId, to: process.env.HR_EMAIL ? 'configured' : 'missing', mailOptions: { subject } });
+
+              console.log('[VIOLATION TERMINATION] Sending termination email', {
+                session: pdfSession.sessionId,
+                to: process.env.HR_EMAIL ? 'configured' : 'MISSING',
+              });
+
               const info = await transporter.sendMail(mailOptions);
-              console.log(`Termination email sent for session=${session.sessionId}`, { messageId: info && info.messageId });
+              console.log(`[VIOLATION TERMINATION] Email sent for session=${pdfSession.sessionId}`, {
+                messageId: info && info.messageId,
+              });
+
+              // Delete the PDF from disk now that it has been emailed
+              try {
+                fs.unlinkSync(pdfPath);
+                console.log(`[VIOLATION TERMINATION] PDF deleted: ${pdfPath}`);
+              } catch (unlinkErr) {
+                console.warn(`[VIOLATION TERMINATION] Could not delete PDF: ${unlinkErr.message}`);
+              }
             } catch (mailErr) {
-              console.error('Error sending termination email:', mailErr && mailErr.message ? mailErr.message : mailErr, mailErr && mailErr.stack ? mailErr.stack : 'no-stack');
+              console.error(
+                '[VIOLATION TERMINATION] Error generating PDF / sending email:',
+                mailErr && mailErr.message ? mailErr.message : mailErr,
+                mailErr && mailErr.stack ? mailErr.stack : 'no-stack'
+              );
             }
           })();
         }
 
-        res.json({ terminated: session.interviewTerminated, counts: { fullscreen: fullscreenCount, tabSwitch: tabSwitchCount } });
+        res.json({ terminated, counts: { fullscreen: fullscreenCount, tabSwitch: tabSwitchCount } });
 
     } catch (error) {
 
@@ -833,6 +910,14 @@ if (pending) {
         });
 
         console.log("Email sent successfully:", info.response);
+
+        // Delete the PDF from disk now that it has been emailed
+        try {
+          fs.unlinkSync(pdfPath);
+          console.log("PDF deleted:", pdfPath);
+        } catch (unlinkErr) {
+          console.warn("Could not delete PDF:", unlinkErr.message);
+        }
       } catch (emailError) {
         console.error("Error sending email:", emailError);
       }
