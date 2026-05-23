@@ -62,8 +62,8 @@ const InterviewSessionSchema = new mongoose.Schema(
 
     violations: [
       {
-        type: String,
-        timestamp: Date
+        type: { type: String },   // "type" is a reserved Mongoose keyword — must use longhand
+        timestamp: { type: Date, default: Date.now }
       }
     ],
 
