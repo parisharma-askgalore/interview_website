@@ -888,20 +888,44 @@ if (pending) {
             process.env.HR_EMAIL,
 
           subject:
-            `Interview Report - ${finalSession.candidate.name}`,
+            `Interview Completed — ${finalSession.candidate.name} (${finalSession.candidate.role})`,
 
-          text:
-            `
-            Interview completed.
-
-            Candidate:
-            ${finalSession.candidate.name}
-            `,
+          text: [
+            `A candidate has successfully completed their interview. Please find the full evaluation report attached.`,
+            ``,
+            `─────────────────────────────────────`,
+            `  CANDIDATE DETAILS`,
+            `─────────────────────────────────────`,
+            `  Name        : ${finalSession.candidate.name}`,
+            `  Email       : ${finalSession.candidate.email}`,
+            `  Role        : ${finalSession.candidate.role}`,
+            ``,
+            `─────────────────────────────────────`,
+            `  INTERVIEW SUMMARY`,
+            `─────────────────────────────────────`,
+            `  Duration    : ${Math.floor(finalSession.interviewDuration / 60)} min ${finalSession.interviewDuration % 60} sec`,
+            `  Questions   : ${finalSession.answers.length}`,
+            `  Avg Score   : ${finalSession.analytics.averageScore.toFixed(1)} / 10`,
+            `  Verdict     : ${finalSession.analytics.recommendation}`,
+            `  Violations  : ${(finalSession.violations || []).length}`,
+            ``,
+            `─────────────────────────────────────`,
+            `  AI EVALUATION`,
+            `─────────────────────────────────────`,
+            `  Strengths   : ${(finalSession.analytics.strengths || []).join(', ') || 'N/A'}`,
+            `  Weaknesses  : ${(finalSession.analytics.weaknesses || []).join(', ') || 'N/A'}`,
+            ``,
+            `─────────────────────────────────────`,
+            `  Completed At: ${new Date().toLocaleString()}`,
+            `─────────────────────────────────────`,
+            ``,
+            `The detailed per-question breakdown with scores and evaluations is available in the attached PDF report.`,
+          ].join('\n'),
 
           attachments: [
             {
               filename:
-                "interview-report.pdf",
+                `interview-report-${finalSession.candidate.name.replace(/\s+/g, '_')}.pdf`,
 
               path:
                 pdfPath

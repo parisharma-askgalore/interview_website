@@ -59,6 +59,11 @@ function Questions() {
   const interviewStartTimeRef = useRef(Date.now());
   const recordingTimeoutRef = useRef(null);
   const isRecordingRef = useRef(false);
+  // Tracks whether the current question needs to be replayed after fullscreen is restored
+  const needsReplayRef = useRef(false);
+  // Keep a always-current mirror of these inside event handlers that close over stale values
+  const currentQuestionIndexRef = useRef(0);
+  const questionsRef = useRef([]);
 
 
   useEffect(() => {
@@ -80,6 +85,24 @@ function Questions() {
     const lastViolationRef = { last: 0 };
 
     const handleFullscreenChange = async () => {
+      // ── Fullscreen RE-ENTERED ──────────────────────────────────────────
+      if (document.fullscreenElement) {
+        if (needsReplayRef.current) {
+          needsReplayRef.current = false;
+          setFullscreenWarning(false);
+          // Use refs — this handler closes over stale state from mount time
+          const q = questionsRef.current[currentQuestionIndexRef.current];
+          if (q) {
+            setStatus("Preparing...");
+            setLiveTranscript("");
+            // Small delay so the overlay has time to hide before TTS starts
+            setTimeout(() => playAIQuestion(q.question), 300);
+          }
+        }
+        return;
+      }
+
+      // ── Fullscreen EXITED ──────────────────────────────────────────────
       if (!document.fullscreenElement) {
         // debounce duplicate events
         const now = Date.now();
@@ -186,9 +209,14 @@ function Questions() {
   const fetchQuestions = async () => {
     try {
       const response = await API.get("/interview/questions");
+      questionsRef.current = response.data;
       setQuestions(response.data);
     } catch (e) { console.log(e); }
   };
+
+  // Keep refs in sync with state so stale-closure handlers always read fresh values
+  useEffect(() => { currentQuestionIndexRef.current = currentQuestionIndex; }, [currentQuestionIndex]);
+  useEffect(() => { questionsRef.current = questions; }, [questions]);
 
   // Ref to track whether we intentionally cancelled speech (e.g. violation) vs natural end
   const speechCancelledRef = useRef(false);
@@ -200,6 +228,8 @@ function Questions() {
       window.speechSynthesis.cancel();
     }
     setSpeaking(false);
+    // Mark that the current question needs to be replayed once fullscreen is restored
+    needsReplayRef.current = true;
   };
 
   const playAIQuestion = async (text) => {
