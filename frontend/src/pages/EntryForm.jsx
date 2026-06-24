@@ -1,35 +1,82 @@
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useState, useEffect } from "react";
+import axios from "axios";
 import API from "../api/interviewApi";
+import DeviceCheck from "../components/DeviceCheck";
 import styles from "../components/StartForm.module.css";
-
-// Inline SVG icons (no extra dependency needed)
-const IconUser = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
-  </svg>
-);
-const IconMail = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
-  </svg>
-);
-const IconBriefcase = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <rect width="20" height="14" x="2" y="7" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
-  </svg>
-);
 
 export default function StartForm() {
   const [searchParams] = useSearchParams();
   const token = searchParams.get("token");
+  const navigate = useNavigate();
+  
+  const [details, setDetails] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
+  
+  const [deviceReady, setDeviceReady] = useState(false);
+  const [timeRemaining, setTimeRemaining] = useState(null);
+  const [isEarly, setIsEarly] = useState(false);
+
+  // Fetch interview details on mount
+  useEffect(() => {
+    if (!token) return;
+
+    const baseURL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8787/api/v1/interview-sessions";
+    const joinUrl = baseURL.replace('/interview-sessions', '/interviews/join');
+
+    const fetchDetails = async () => {
+      try {
+        const res = await axios.get(`${joinUrl}/${token}`);
+        setDetails(res.data);
+      } catch (err) {
+        setError(err.response?.data?.error || "Failed to fetch interview details. Link might be invalid or expired.");
+      }
+    };
+    fetchDetails();
+  }, [token]);
+
+  // Countdown timer logic
+  useEffect(() => {
+    if (!details || !details.scheduledAt) return;
+
+    const checkTime = () => {
+      const now = new Date().getTime();
+      const scheduled = new Date(details.scheduledAt).getTime();
+      const diffSeconds = Math.floor((scheduled - now) / 1000);
+
+      if (diffSeconds > 0) {
+        setIsEarly(true);
+        setTimeRemaining(diffSeconds);
+      } else {
+        setIsEarly(false);
+        setTimeRemaining(0);
+      }
+    };
+
+    // Initial check
+    checkTime();
+
+    // Setup interval
+    const interval = setInterval(checkTime, 1000);
+    return () => clearInterval(interval);
+  }, [details]);
+
+  const formatTime = (totalSeconds) => {
+    if (totalSeconds === null || totalSeconds < 0) return "00:00";
+    const m = Math.floor(totalSeconds / 60);
+    const s = totalSeconds % 60;
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!token) {
       setError("No interview token found in URL. Please use the link provided in your email.");
+      return;
+    }
+    if (isEarly) {
+      setError("It is not time for your interview yet.");
       return;
     }
 
@@ -53,54 +100,102 @@ export default function StartForm() {
 
   return (
     <div className={styles.page}>
-          <div className={styles.card}>
-    
-            {/* Header */}
-            <div className={styles.header}>
-              <div className={styles.badge}>Interview Portal</div>
-              <h1 className={styles.title}>
-                <span>Candidate</span> Application
-              </h1>
-              <p className={styles.subtitle}>
-                Fill in your details below to begin the interview process.
-              </p>
+      <div className={styles.card}>
+
+        {/* Header */}
+        <div className={styles.header}>
+          <div className={styles.badge}>Interview Portal</div>
+          <h1 className={styles.title}>
+            <span>Candidate</span> Application
+          </h1>
+          <p className={styles.subtitle}>
+            {details ? `Welcome, ${details.candidateName}` : "Verify your details to begin."}
+          </p>
+        </div>
+
+        {/* Form */}
+        <form onSubmit={handleSubmit} className={styles.form}>
+
+          {error && (
+            <div style={{ color: '#ef4444', background: '#fee2e2', padding: '12px', borderRadius: '8px', marginBottom: '16px', fontSize: '14px', border: '1px solid #fca5a5' }}>
+              {error}
             </div>
-    
-            {/* Form */}
-            <form onSubmit={handleSubmit} className={styles.form}>
-    
-              {error && (
-                <div style={{ color: '#ef4444', background: '#fee2e2', padding: '12px', borderRadius: '8px', marginBottom: '16px', fontSize: '14px', border: '1px solid #fca5a5' }}>
-                  {error}
+          )}
+
+          {!token ? (
+            <div className={styles.field} style={{ textAlign: 'center', color: '#ef4444', marginBottom: '24px' }}>
+              <p>Missing interview token. Please use the link from your email.</p>
+            </div>
+          ) : !details && !error ? (
+            <div className={styles.field} style={{ textAlign: 'center', color: '#cbd5e1', marginBottom: '24px' }}>
+              <p>Loading interview details...</p>
+            </div>
+          ) : details && (
+            <>
+              {/* Interview Info */}
+              <div style={{ backgroundColor: '#1e293b', padding: '16px', borderRadius: '8px', marginBottom: '20px', color: '#e2e8f0', fontSize: '14px', border: '1px solid #334155' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <span style={{ color: '#94a3b8' }}>Position:</span>
+                  <strong>{details.position}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <span style={{ color: '#94a3b8' }}>Scheduled Start:</span>
+                  <strong>{new Date(details.scheduledAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#94a3b8' }}>Duration:</span>
+                  <strong>{details.durationMinutes} minutes</strong>
+                </div>
+              </div>
+
+              {/* Waiting Room & Device Check */}
+              {isEarly ? (
+                <div style={{ marginBottom: '24px' }}>
+                  <div style={{ backgroundColor: '#0f172a', border: '1px solid #3b82f6', borderRadius: '8px', padding: '16px', textAlign: 'center', marginBottom: '20px' }}>
+                    <p style={{ margin: '0 0 8px 0', color: '#93c5fd', fontSize: '14px', fontWeight: '500' }}>Starting In</p>
+                    <div style={{ fontSize: '32px', fontWeight: 'bold', color: '#60a5fa', fontFamily: 'monospace' }}>
+                      {formatTime(timeRemaining)}
+                    </div>
+                    <p style={{ margin: '8px 0 0 0', color: '#cbd5e1', fontSize: '13px' }}>
+                      Please wait here until your scheduled time. You can use this time to check your camera and microphone below.
+                    </p>
+                  </div>
+                  
+                  <DeviceCheck onReady={setDeviceReady} />
+                </div>
+              ) : (
+                <div style={{ marginBottom: '24px' }}>
+                  <DeviceCheck onReady={setDeviceReady} />
                 </div>
               )}
+            </>
+          )}
 
-              <div className={styles.field} style={{ textAlign: 'center', color: '#cbd5e1', marginBottom: '24px' }}>
-                {token ? (
-                  <p>You have a valid interview link. Click below to begin the technical checks and read the instructions.</p>
-                ) : (
-                  <p style={{ color: '#ef4444' }}>Missing interview token. Please use the link from your email.</p>
-                )}
-              </div>
-    
-              <div className={styles.divider} />
-    
-              <button type="submit" className={styles.submitBtn} disabled={!token || loading}>
-                <span className={styles.btnInner}>
-                  {loading ? "Starting..." : "Continue to Instructions"}
-                  <svg className={styles.btnArrow} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>
-                  </svg>
-                </span>
-              </button>
-    
-            </form>
-    
-            <p className={styles.footerNote}>
-              All fields are <strong>required</strong>. Your information is kept confidential.
-            </p>
-    
-          </div>
-        </div>
+          <div className={styles.divider} />
+
+          <button 
+            type="submit" 
+            className={styles.submitBtn} 
+            disabled={!token || !details || isEarly || !deviceReady || loading}
+            style={(!deviceReady || isEarly) ? { opacity: 0.6, cursor: 'not-allowed' } : {}}
+          >
+            <span className={styles.btnInner}>
+              {loading ? "Starting..." : 
+               isEarly ? "Waiting for Scheduled Time..." : 
+               !deviceReady ? "Waiting for Device Access..." : "Continue to Instructions"}
+              <svg className={styles.btnArrow} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>
+              </svg>
+            </span>
+          </button>
+
+        </form>
+
+        <p className={styles.footerNote}>
+          Your interview will be recorded for evaluation purposes.
+        </p>
+
+      </div>
+    </div>
   );
 }
