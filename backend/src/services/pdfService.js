@@ -1,6 +1,19 @@
 import PDFDocument from "pdfkit";
 import fs from "fs";
 
+// ── IST helper ───────────────────────────────────────────────────────────────
+const toIST = (date = new Date()) =>
+  date.toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }) + " IST";
+
 const PAGE_WIDTH   = 612; // PDFKit default (letter)
 const MARGIN       = 50;
 const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2; // 512
@@ -69,7 +82,7 @@ const generateInterviewPDF = (session, outputPath) => {
     doc
       .fontSize(11)
       .font("Helvetica")
-      .text(`Generated: ${new Date().toLocaleString()}`, MARGIN, 62, {
+      .text(`Generated: ${toIST()}`, MARGIN, 62, {
         width: CONTENT_WIDTH,
       });
 
@@ -196,7 +209,7 @@ const generateInterviewPDF = (session, outputPath) => {
           .fontSize(12)
           .font("Helvetica")
           .text(
-            `${index + 1}. ${violation.type} — ${new Date(violation.timestamp).toLocaleString()}`,
+            `${index + 1}. ${violation.type} — ${toIST(new Date(violation.timestamp))}`,
             MARGIN,
             doc.y,
             { width: CONTENT_WIDTH }

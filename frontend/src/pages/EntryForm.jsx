@@ -1,5 +1,5 @@
-import { useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { useState, useEffect } from "react";
 import API from "../api/interviewApi";
 import styles from "../components/StartForm.module.css";
 
@@ -21,44 +21,35 @@ const IconBriefcase = () => (
 );
 
 export default function StartForm() {
-  const [formData, setFormData] = useState({
-    name: "",
-    email: "",
-    role: ""
-  });
-
-  const navigate = useNavigate();
-
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
-  };
+  const [searchParams] = useSearchParams();
+  const token = searchParams.get("token");
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!token) {
+      setError("No interview token found in URL. Please use the link provided in your email.");
+      return;
+    }
 
-  e.preventDefault();
-
-  try {
-
-    const response = await API.post(
-      "/interview/start",
-      formData
-    );
-
-    localStorage.setItem(
-      "sessionId",
-      response.data.sessionId
-    );
-    navigate("/instructions");
-
-  } catch (error) {
-
-    console.log(error);
-
-  }
-};
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await API.post("/start", { token });
+      
+      // The Hono backend returns session_id, position, etc.
+      localStorage.setItem("sessionId", response.data.session_id);
+      localStorage.setItem("position", response.data.position || "");
+      
+      navigate("/instructions");
+    } catch (err) {
+      console.error(err);
+      setError(err.response?.data?.error || "Failed to start interview. Please check your link or contact HR.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className={styles.page}>
@@ -78,89 +69,25 @@ export default function StartForm() {
             {/* Form */}
             <form onSubmit={handleSubmit} className={styles.form}>
     
-              <div className={styles.field}>
-                <label className={styles.label}>
-                  Name <span className={styles.required}>*</span>
-                </label>
-                <div className={styles.inputWrap}>
-                  <span className={styles.inputIcon}><IconUser /></span>
-                  <input
-                    className={styles.input}
-                    type="text"
-                    name="name"
-                    placeholder="Your full name"
-                    onChange={handleChange}
-                    required
-                  />
+              {error && (
+                <div style={{ color: '#ef4444', background: '#fee2e2', padding: '12px', borderRadius: '8px', marginBottom: '16px', fontSize: '14px', border: '1px solid #fca5a5' }}>
+                  {error}
                 </div>
-              </div>
-    
-              <div className={styles.field}>
-                <label className={styles.label}>
-                  Email <span className={styles.required}>*</span>
-                </label>
-                <div className={styles.inputWrap}>
-                  <span className={styles.inputIcon}><IconMail /></span>
-                  <input
-                    className={styles.input}
-                    type="email"
-                    name="email"
-                    placeholder="you@example.com"
-                    onChange={handleChange}
-                    required
-                  />
-                </div>
-              </div>
-    
-              <div className={styles.field}>
-                <label className={styles.label}>Role
-                  <span className={styles.required}>*</span>
-                </label>
+              )}
 
-                <div className={styles.inputWrap}>
-
-                  <span className={styles.inputIcon}>
-                    <IconBriefcase />
-                  </span>
-
-                  <select
-                    className={styles.input}
-                    name="role"
-                    value={formData.role || ""}
-                    onChange={handleChange}
-                    required
-                  >
-
-                    <option value="">
-                      Select Role
-                    </option>
-
-                    <option value="AI/ML Intern">
-                      AI/ML Intern
-                    </option>
-
-                    <option value="AI/ML Engineer">
-                      AI/ML Engineer
-                    </option>
-
-                    <option value="DevOps Engineer">
-                      DevOps Engineer
-                    </option>
-
-                    <option value="AI/ML Fintech Engineer">
-                      AI/ML Fintech Engineer
-                    </option>
-
-                  </select>
-
-                </div>
+              <div className={styles.field} style={{ textAlign: 'center', color: '#cbd5e1', marginBottom: '24px' }}>
+                {token ? (
+                  <p>You have a valid interview link. Click below to begin the technical checks and read the instructions.</p>
+                ) : (
+                  <p style={{ color: '#ef4444' }}>Missing interview token. Please use the link from your email.</p>
+                )}
               </div>
     
               <div className={styles.divider} />
     
-              <button type="submit" className={styles.submitBtn}>
+              <button type="submit" className={styles.submitBtn} disabled={!token || loading}>
                 <span className={styles.btnInner}>
-                  Continue to Instructions
+                  {loading ? "Starting..." : "Continue to Instructions"}
                   <svg className={styles.btnArrow} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>
                   </svg>

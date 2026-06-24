@@ -51,8 +51,6 @@ function Questions() {
   const transcriptRef = useRef(null);
   const streamRef = useRef(null);
   const silenceTimeoutRef = useRef(null);
-  const analyserRef = useRef(null);
-  const audioContextRef = useRef(null);
   const timerIntervalRef = useRef(null);
   const questionTimerRef = useRef(null);
   const questionStartTimeRef = useRef(null);
@@ -64,6 +62,8 @@ function Questions() {
   // Keep a always-current mirror of these inside event handlers that close over stale values
   const currentQuestionIndexRef = useRef(0);
   const questionsRef = useRef([]);
+  const utteranceRef = useRef(null);
+  const voiceDetectedRef = useRef(false);
 
 
   useEffect(() => {
@@ -110,7 +110,7 @@ function Questions() {
         lastViolationRef.last = now;
 
         // Stop AI speech immediately — user left fullscreen
-        stopSpeakingImmediately();
+        stopSpeakingImmediately(true);
 
         try {
           // increment local defensive counter first
@@ -178,7 +178,7 @@ function Questions() {
     const handleVisibility = async () => {
       if (document.hidden) {
         // Stop AI speech immediately — tab is hidden
-        stopSpeakingImmediately();
+        stopSpeakingImmediately(true);
 
         // Immediately register tab switch violation and terminate
         try {
@@ -222,37 +222,51 @@ function Questions() {
   const speechCancelledRef = useRef(false);
 
   /** Immediately silence TTS without triggering the normal "onend → startRecording" flow. */
-  const stopSpeakingImmediately = () => {
+  const stopSpeakingImmediately = (isViolation = false) => {
     if (window.speechSynthesis && window.speechSynthesis.speaking) {
       speechCancelledRef.current = true; // flag so onend knows not to start recording
       window.speechSynthesis.cancel();
     }
     setSpeaking(false);
-    // Mark that the current question needs to be replayed once fullscreen is restored
-    needsReplayRef.current = true;
+    utteranceRef.current = null;
+    if (isViolation) {
+      // Mark that the current question needs to be replayed once fullscreen is restored
+      needsReplayRef.current = true;
+    }
   };
 
-  const playAIQuestion = async (text) => {
-    try {
-      if (window.speechSynthesis) {
-        speechCancelledRef.current = false; // reset flag for new utterance
-        const utter = new SpeechSynthesisUtterance(text);
-        setSpeaking(true);
-        utter.onend = () => {
-          // Only start recording if the speech ended naturally (not cancelled by violation)
-          if (!speechCancelledRef.current) {
-            setSpeaking(false);
-            startRecording();
-          }
-        };
-        window.speechSynthesis.cancel();
-        window.speechSynthesis.speak(utter);
-      } else {
-        // If speechSynthesis isn't available, proceed to recording
-        startRecording();
-      }
-    } catch (e) {
-      console.error("speechSynthesis error:", e);
+  const playAIQuestion = (text) => {
+    // Cancel any ongoing speech first
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+
+    speechCancelledRef.current = false;
+
+    if (window.speechSynthesis) {
+      const utter = new SpeechSynthesisUtterance(text);
+      utteranceRef.current = utter; // prevent garbage collection
+      setSpeaking(true);
+      utter.onend = () => {
+        utteranceRef.current = null;
+        if (!speechCancelledRef.current) {
+          setSpeaking(false);
+          // ONLY start recording AFTER TTS finishes
+          startRecording();
+        }
+      };
+      utter.onerror = (e) => {
+        console.error("TTS error:", e);
+        utteranceRef.current = null;
+        setSpeaking(false);
+        if (!speechCancelledRef.current) {
+          startRecording();
+        }
+      };
+      window.speechSynthesis.speak(utter);
+    } else {
+      // No TTS available — start recording immediately
+      setSpeaking(false);
       startRecording();
     }
   };
@@ -263,105 +277,258 @@ function Questions() {
     if (currentQuestion && !showEnterFullscreen) playAIQuestion(currentQuestion.question);
   }, [currentQuestion, showEnterFullscreen]);
 
-  const startRecording = async () => {
-    setLiveTranscript("");
-    setStatus("Recording");
-    try {
-      const speechConfig = sdk.SpeechConfig.fromSubscription(
-        import.meta.env.VITE_AZURE_SPEECH_KEY, "centralindia"
-      );
-      speechConfig.speechRecognitionLanguage = "en-US";
-      const audioConfig = sdk.AudioConfig.fromDefaultMicrophoneInput();
-      const recognizer = new sdk.SpeechRecognizer(speechConfig, audioConfig);
-      let finalTranscript = "";
+const startRecording = async () => {
+  // ─── Guard: prevent double-start ──────────────────────────────────────────
+  if (isRecordingRef.current) {
+    console.warn("startRecording called while already recording — skipping");
+    return;
+  }
 
-      recognizer.recognizing = (s, e) => setLiveTranscript(e.result.text);
-      recognizer.recognized = (s, e) => {
-        if (e.result.reason === sdk.ResultReason.RecognizedSpeech) {
-          finalTranscript += " " + e.result.text;
-          setLiveTranscript(finalTranscript);
+  // ─── Guard: Azure credentials ─────────────────────────────────────────────
+  const speechKey = import.meta.env.VITE_AZURE_SPEECH_KEY;
+  const speechRegion = import.meta.env.VITE_AZURE_SPEECH_REGION;
+
+  if (!speechKey || !speechRegion) {
+    setStatus("Azure Speech credentials not configured");
+    console.error("[Azure STT] Missing VITE_AZURE_SPEECH_KEY or VITE_AZURE_SPEECH_REGION");
+    return;
+  }
+
+  setLiveTranscript("");
+  setStatus("Requesting microphone...");
+  voiceDetectedRef.current = false;
+
+  // ─── Explicitly acquire microphone ─────────────────────────────────────────
+  let mediaStream;
+  try {
+    mediaStream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      video: false,
+    });
+    const tracks = mediaStream.getAudioTracks();
+    console.log(`[Azure STT] Microphone granted — ${tracks.length} audio track(s):`, tracks.map(t => t.label));
+    if (tracks.length === 0) {
+      setStatus("No microphone audio track available");
+      return;
+    }
+  } catch (e) {
+    console.error("[Azure STT] getUserMedia failed:", e);
+    setStatus("Microphone access denied — allow mic access and reload");
+    return;
+  }
+
+  streamRef.current = mediaStream;
+
+  // ─── Azure Speech SDK setup ────────────────────────────────────────────────
+  const speechConfig = sdk.SpeechConfig.fromSubscription(speechKey, speechRegion);
+  speechConfig.speechRecognitionLanguage = "en-US";
+
+  // 5-second initial silence → service will fire NoMatch
+  speechConfig.setProperty(
+    sdk.PropertyId.SpeechServiceConnection_InitialSilenceTimeoutMs,
+    "5000"
+  );
+  // 3-second end-of-speech silence
+  speechConfig.setProperty(
+    sdk.PropertyId.SpeechServiceConnection_EndSilenceTimeoutMs,
+    "3000"
+  );
+
+  // Pass the explicit MediaStream to Azure SDK instead of fromDefaultMicrophoneInput
+  // const audioConfig = sdk.AudioConfig.fromStreamInput(mediaStream);
+  const audioConfig = sdk.AudioConfig.fromStreamInput(mediaStream);
+  const recognizer = new sdk.SpeechRecognizer(speechConfig, audioConfig);
+
+  let finalTranscript = "";
+
+  // ─── Live interim transcripts ──────────────────────────────────────────────
+  recognizer.recognizing = (_s, e) => {
+    if (e.result.reason === sdk.ResultReason.RecognizingSpeech) {
+      voiceDetectedRef.current = true;
+      // Clear initial silence timeout — user is speaking
+      if (silenceTimeoutRef.current) {
+        clearTimeout(silenceTimeoutRef.current);
+        silenceTimeoutRef.current = null;
+      }
+      // Reset end-of-speech silence timer (3s after last speech activity)
+      silenceTimeoutRef.current = setTimeout(() => {
+        if (isRecordingRef.current && voiceDetectedRef.current) {
+          console.warn("[Azure STT] End-of-speech silence — auto-submitting");
+          stopRecording();
         }
-      };
-      recognizer.startContinuousRecognitionAsync();
-      recognizerRef.current = recognizer;
-      transcriptRef.current = () => finalTranscript;
+      }, 3000);
 
-      isRecordingRef.current = true;
-      setIsRecording(true);
-      questionStartTimeRef.current = Date.now();
-
-      questionTimerRef.current = setInterval(() => {}, 1000); // kept for stopRecording timing calc
-
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current = stream;
-      detectSilence(stream);
-
-      recordingTimeoutRef.current = setTimeout(() => {
-        if (isRecordingRef.current) { console.warn("Recording timeout"); stopRecording(); }
-      }, 30000);
-    } catch (e) {
-      console.error("Error starting recording:", e);
-      isRecordingRef.current = false;
-      setIsRecording(false);
-      setStatus("Microphone error - retrying...");
-      setTimeout(() => startRecording(), 2000);
+      setLiveTranscript((finalTranscript + e.result.text).trim());
+      console.log("[Azure STT] Recognizing (interim):", e.result.text);
     }
   };
 
-  const detectSilence = (stream) => {
-    try {
-      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-      audioContextRef.current = audioContext;
-      const analyser = audioContext.createAnalyser();
-      analyserRef.current = analyser;
-      const microphone = audioContext.createMediaStreamSource(stream);
-      microphone.connect(analyser);
-      const dataArray = new Uint8Array(analyser.frequencyBinCount);
-      let voiceDetected = false;
+  // ─── Final recognized phrases ──────────────────────────────────────────────
+  recognizer.recognized = (_s, e) => {
+    if (e.result.reason === sdk.ResultReason.RecognizedSpeech && e.result.text) {
+      voiceDetectedRef.current = true;
+      finalTranscript += e.result.text + " ";
+      console.log(finalTranscript,"final transcript )()()()(()()((")
+      setLiveTranscript(finalTranscript.trim());
+      console.log("[Azure STT] Recognized (final):", e.result.text);
 
+      // Reset end-of-speech silence timer
+      if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current);
       silenceTimeoutRef.current = setTimeout(() => {
-        if (!voiceDetected) stopRecording();
-      }, 5000);
-
-      const checkVoice = () => {
-        analyser.getByteFrequencyData(dataArray);
-        const volume = dataArray.reduce((a, b) => a + b, 0);
-        if (volume > 1000) { voiceDetected = true; clearTimeout(silenceTimeoutRef.current); }
-        if (isRecordingRef.current) requestAnimationFrame(checkVoice);
-      };
-      checkVoice();
-    } catch (e) { console.error("Error in detectSilence:", e); }
+        if (isRecordingRef.current && voiceDetectedRef.current) {
+          console.warn("[Azure STT] End-of-speech silence — auto-submitting");
+          stopRecording();
+        }
+      }, 3000);
+    } else if (e.result.reason === sdk.ResultReason.NoMatch) {
+      console.log("[Azure STT] NoMatch — no speech could be recognized");
+      // If initial silence timeout from Azure service and no voice yet, auto-skip
+      if (!voiceDetectedRef.current && isRecordingRef.current) {
+        console.warn("[Azure STT] Azure NoMatch + no voice → auto-skipping");
+        stopRecording();
+      }
+    }
   };
 
-  const stopRecording = async () => {
-    clearInterval(questionTimerRef.current);
-    const questionTimeTaken = Math.floor((Date.now() - questionStartTimeRef.current) / 1000);
-    isRecordingRef.current = false;
-    setIsRecording(false);
-    if (recordingTimeoutRef.current) clearTimeout(recordingTimeoutRef.current);
-    if (recognizerRef.current) recognizerRef.current.stopContinuousRecognitionAsync();
+  // ─── Handle cancellation / errors ──────────────────────────────────────────
+  recognizer.canceled = (_s, e) => {
+    console.error("[Azure STT] Canceled:", sdk.CancellationReason[e.reason], e.errorDetails);
+    if (e.reason === sdk.CancellationReason.Error) {
+      setStatus(`Speech error: ${e.errorDetails || "unknown"}`);
+      isRecordingRef.current = false;
+      setIsRecording(false);
+    }
+    // If canceled due to no speech detected, auto-submit
+    if (!voiceDetectedRef.current && isRecordingRef.current) {
+      console.warn("[Azure STT] Canceled with no voice → auto-skipping");
+      stopRecording();
+    }
+  };
 
-    const transcript = transcriptRef.current ? transcriptRef.current() : "";
-    const currentQ = questions[currentQuestionIndex];
-    if (!currentQ) { console.error("Question not found"); return; }
+  recognizer.sessionStarted = (_s, _e) => {
+    console.log("[Azure STT] Session started (WebSocket connected)");
+  };
+
+  recognizer.sessionStopped = (_s, _e) => {
+    console.log("[Azure STT] Session stopped");
+  };
+
+  // ─── Store refs ────────────────────────────────────────────────────────────
+  recognizerRef.current = recognizer;
+  transcriptRef.current = () => finalTranscript.trim();
+
+  // ─── Start continuous recognition ──────────────────────────────────────────
+  recognizer.startContinuousRecognitionAsync(
+    () => {
+      console.log("[Azure STT] Started continuous recognition");
+      isRecordingRef.current = true;
+      setIsRecording(true);
+      setStatus("Recording — speak now");
+      questionStartTimeRef.current = Date.now();
+
+      // 5-second initial silence timeout (client-side backup)
+      if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current);
+      silenceTimeoutRef.current = setTimeout(() => {
+        if (!voiceDetectedRef.current && isRecordingRef.current) {
+          console.warn("[Azure STT] 5s silence timeout — no voice detected, auto-skipping");
+          stopRecording();
+        }
+      }, 5000);
+
+      // 30-second hard cap
+      if (recordingTimeoutRef.current) clearTimeout(recordingTimeoutRef.current);
+      recordingTimeoutRef.current = setTimeout(() => {
+        if (isRecordingRef.current) {
+          console.warn("[Azure STT] 30s hard cap reached");
+          stopRecording();
+        }
+      }, 30000);
+    },
+    (err) => {
+      console.error("[Azure STT] Start failed:", err);
+      setStatus("Could not start speech recognition — check microphone permissions");
+      isRecordingRef.current = false;
+      setIsRecording(false);
+      // Release mic on failure
+      if (mediaStream) mediaStream.getAudioTracks().forEach(t => t.stop());
+      streamRef.current = null;
+    }
+  );
+};
+
+const stopRecording = () => {
+  if (!isRecordingRef.current) return;
+
+  // Flip state FIRST so event handlers don't re-trigger
+  isRecordingRef.current = false;
+  setIsRecording(false);
+  setStatus("Processing...");
+
+  clearTimeout(silenceTimeoutRef.current);
+  clearTimeout(recordingTimeoutRef.current);
+  clearInterval(questionTimerRef.current);
+
+  const transcript = transcriptRef.current?.() ?? "";
+  console.log("[stopRecording] Final transcript:", transcript);
+
+  // Stop Azure recognizer
+  const recognizer = recognizerRef.current;
+  if (recognizer) {
+    recognizerRef.current = null;
+    recognizer.stopContinuousRecognitionAsync(
+      () => {
+        console.log("[Azure STT] Stopped");
+        try { recognizer.close(); } catch (_e) { /* ignore */ }
+      },
+      (err) => {
+        console.warn("[Azure STT] Stop error:", err);
+        try { recognizer.close(); } catch (_e) { /* ignore */ }
+      }
+    );
+  }
+
+  // Release microphone stream
+  if (streamRef.current) {
+    streamRef.current.getAudioTracks().forEach(track => track.stop());
+    streamRef.current = null;
+    console.log("[Azure STT] Microphone released");
+  }
+
+  // Submit the answer and advance to next question
+  submitAnswerAndNext(transcript);
+};
+
+  const submitAnswerAndNext = async (transcript) => {
+    console.log(transcript,"____________________________@@@@@@")
+    const question = questionsRef.current[currentQuestionIndexRef.current];
+    if (!question) {
+      moveNextQuestion();
+      return;
+    }
+
+    const timeTaken = questionStartTimeRef.current
+      ? Math.round((Date.now() - questionStartTimeRef.current) / 1000)
+      : 0;
 
     setStatus("Processing answer");
 
     try {
       await API.post(`/interview/${sessionId}/answer`, {
-        questionIndex: currentQuestionIndex,
-        questionText: currentQ.question,
-        transcript,
-        expectedAnswer: currentQ.answer,
-        timeTaken: questionTimeTaken,
-        isFollowUp: currentQ.isFollowUp || false,
-        parentQuestion: currentQ.parentQuestion || null,
+        questionIndex: currentQuestionIndexRef.current,
+        questionText: question.question,
+        transcript: transcript || "(no response)",
+        timeTaken,
+        expectedAnswer: question.answer || "",
+        isFollowUp: question.isFollowUp || false,
+        parentQuestion: question.parentQuestion || null,
       });
-    } catch (e) { console.error("Error submitting answer:", e); }
+      console.log("[submitAnswer] Answer submitted successfully");
+    } catch (e) {
+      console.error("[submitAnswer] Failed to submit answer:", e);
+    }
 
     moveNextQuestion();
-  };
-
+  };  
   const moveNextQuestion = async () => {
     const nextIndex = currentQuestionIndex + 1;
     if (nextIndex >= TOTAL) {

@@ -14,9 +14,23 @@ import {
 import generateInterviewPDF
 from "../services/pdfService.js";
 import fs from "fs";
+import { uploadPDF } from "../services/azureBlobService.js";
 
 import transporter
 from "../services/mailService.js";
+
+// ── IST helper ─────────────────────────────────────────────────────────────
+const toIST = (date = new Date()) =>
+  date.toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }) + " IST";
 
 const router = express.Router();
 
@@ -358,6 +372,21 @@ router.post(
               await generateInterviewPDF(pdfSession, pdfPath);
               console.log(`[VIOLATION TERMINATION] PDF generated at ${pdfPath}`);
 
+              // Upload PDF to Azure Blob
+              let blobUrl = null;
+              try {
+                const blobName = `reports/interview-report-${pdfSession.sessionId}.pdf`;
+                blobUrl = await uploadPDF(pdfPath, blobName);
+                if (blobUrl) {
+                  await InterviewSession.updateOne(
+                    { sessionId: pdfSession.sessionId },
+                    { $set: { pdfUrl: blobUrl } }
+                  );
+                }
+              } catch (blobErr) {
+                console.error("[VIOLATION TERMINATION] Blob upload failed:", blobErr.message);
+              }
+
               // ── Send email with PDF attached ──────────────────────────
               const subject = `Interview Terminated (Violation) - ${pdfSession.candidate?.name || pdfSession.sessionId}`;
               const text = [
@@ -370,7 +399,7 @@ router.post(
                 `Reason          : ${pdfSession.terminationReason || 'violation'}`,
                 `Fullscreen exits: ${fullscreenCount}`,
                 `Tab switches    : ${tabSwitchCount}`,
-                `Timestamp       : ${new Date().toISOString()}`,
+                `Timestamp       : ${toIST()}`,
                 ``,
                 `The full interview report (answers completed before termination) is attached.`,
               ].join('\n');
@@ -444,6 +473,25 @@ router.get("/questions", async (req, res) => {
       message: error.message
     });
 
+  }
+});
+
+router.get("/sessions", async (req, res) => {
+  try {
+    const sessions = await InterviewSession.find().sort({ createdAt: -1 });
+    res.json(sessions);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+router.get("/sessions/:sessionId", async (req, res) => {
+  try {
+    const session = await InterviewSession.findOne({ sessionId: req.params.sessionId });
+    if (!session) return res.status(404).json({ message: "Session not found" });
+    res.json(session);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
   }
 });
 
@@ -876,6 +924,21 @@ if (pending) {
       );
 
       console.log("PDF generated successfully");
+
+      // Upload PDF to Azure Blob
+      let blobUrl = null;
+      try {
+        const blobName = `reports/interview-report-${finalSession.sessionId}.pdf`;
+        blobUrl = await uploadPDF(pdfPath, blobName);
+        if (blobUrl) {
+          await InterviewSession.updateOne(
+            { sessionId: finalSession.sessionId },
+            { $set: { pdfUrl: blobUrl } }
+          );
+        }
+      } catch (blobErr) {
+        console.error("Blob upload failed:", blobErr.message);
+      }
       console.log("Attempting to send email to:", process.env.HR_EMAIL);
 
       try {
@@ -916,7 +979,7 @@ if (pending) {
             `  Weaknesses  : ${(finalSession.analytics.weaknesses || []).join(', ') || 'N/A'}`,
             ``,
             `─────────────────────────────────────`,
-            `  Completed At: ${new Date().toLocaleString()}`,
+            `  Completed At: ${toIST()}`,
             `─────────────────────────────────────`,
             ``,
             `The detailed per-question breakdown with scores and evaluations is available in the attached PDF report.`,
